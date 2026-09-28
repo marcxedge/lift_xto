@@ -1,0 +1,512 @@
+import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+
+import '../database/database_helper.dart';
+import '../models/exercise.dart';
+import '../models/exercise_log.dart';
+import '../utils/constants.dart';
+import '../utils/muscle_groups.dart';
+import '../widgets/log_entry_sheet.dart';
+import '../widgets/muscle_chip.dart';
+
+class ExerciseDetailScreen extends StatefulWidget {
+  const ExerciseDetailScreen({super.key, required this.exerciseId});
+
+  final int exerciseId;
+
+  @override
+  State<ExerciseDetailScreen> createState() => _ExerciseDetailScreenState();
+}
+
+class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
+  final _db = DatabaseHelper.instance;
+  Exercise? _exercise;
+  List<ExerciseLog> _logs = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final ex = await _db.getExercise(widget.exerciseId);
+    final logs = await _db.getLogsForExercise(widget.exerciseId);
+    setState(() {
+      _exercise = ex;
+      _logs = logs;
+      _loading = false;
+    });
+  }
+
+  Future<void> _addLog() async {
+    if (_exercise == null) return;
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => LogEntrySheet(exercise: _exercise!),
+    );
+    if (saved == true) _load();
+  }
+
+  Future<void> _deleteLog(ExerciseLog log) async {
+    if (log.id == null) return;
+    await _db.deleteExerciseLog(log.id!);
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    final ex = _exercise;
+    if (ex == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text('Ejercicio no encontrado')),
+      );
+    }
+
+    final isDuration = ex.trackingType == TrackingType.duration;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(ex.name)),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addLog,
+        icon: const Icon(Icons.add),
+        label: const Text('Registrar'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isDuration ? Icons.timer : Icons.fitness_center,
+                        color: scheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        ex.repsLabel,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        Weekday.name(ex.dayOfWeek),
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                  if (ex.notes != null && ex.notes!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      ex.notes!,
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                  Builder(
+                    builder: (_) {
+                      final assignment = MuscleDetector.detect(ex.name);
+                      if (assignment.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: MuscleChipsRow(
+                          assignment: assignment,
+                          maxChips: 8,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _StatsRow(logs: _logs, isDuration: isDuration),
+          const SizedBox(height: 16),
+          if (_logs.length >= 2) ...[
+            Text(
+              'Progreso',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 220,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 24, 16, 8),
+                  child: _ProgressChart(logs: _logs, isDuration: isDuration),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          Text(
+            'Historial',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          if (_logs.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.timeline,
+                        size: 48,
+                        color: scheme.outline,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text('Sin registros aún'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Toca "Registrar" para empezar tu sobrecarga progresiva.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            ..._logs.reversed.map(
+                  (log) => _LogTile(
+                log: log,
+                isDuration: isDuration,
+                onDelete: () => _deleteLog(log),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatsRow extends StatelessWidget {
+  const _StatsRow({required this.logs, required this.isDuration});
+
+  final List<ExerciseLog> logs;
+  final bool isDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    String last = '—';
+    String pr = '—';
+    String count = logs.length.toString();
+
+    if (logs.isNotEmpty) {
+      final l = logs.last;
+      if (isDuration && l.durationSeconds != null) {
+        last = _fmtSeconds(l.durationSeconds!);
+      } else if (l.weightKg != null) {
+        last = '${_fmtWeight(l.weightKg!)} kg';
+      }
+
+      if (isDuration) {
+        final maxDur = logs
+            .where((e) => e.durationSeconds != null)
+            .map((e) => e.durationSeconds!)
+            .fold<int?>(null, (m, v) => m == null || v > m ? v : m);
+        if (maxDur != null) pr = _fmtSeconds(maxDur);
+      } else {
+        final maxW = logs
+            .where((e) => e.weightKg != null)
+            .map((e) => e.weightKg!)
+            .fold<double?>(null, (m, v) => m == null || v > m ? v : m);
+        if (maxW != null) pr = '${_fmtWeight(maxW)} kg';
+      }
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            label: 'Último',
+            value: last,
+            icon: Icons.history,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _StatCard(
+            label: isDuration ? 'Récord' : 'PR',
+            value: pr,
+            icon: Icons.emoji_events,
+            highlight: true,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _StatCard(
+            label: 'Sesiones',
+            value: count,
+            icon: Icons.checklist,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _fmtWeight(double w) {
+    return w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toStringAsFixed(1);
+  }
+
+  String _fmtSeconds(int s) {
+    final m = s ~/ 60;
+    final r = s % 60;
+    if (m == 0) return '${s}s';
+    if (r == 0) return '${m}min';
+    return '${m}min ${r}s';
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.highlight = false,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: highlight ? scheme.primaryContainer : null,
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: highlight ? scheme.onPrimaryContainer : scheme.primary,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color:
+                highlight ? scheme.onPrimaryContainer : scheme.onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: highlight
+                    ? scheme.onPrimaryContainer.withValues(alpha: 0.8)
+                    : scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProgressChart extends StatelessWidget {
+  const _ProgressChart({required this.logs, required this.isDuration});
+
+  final List<ExerciseLog> logs;
+  final bool isDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final spots = <FlSpot>[];
+    for (var i = 0; i < logs.length; i++) {
+      final l = logs[i];
+      final value = isDuration
+          ? (l.durationSeconds?.toDouble() ?? 0)
+          : (l.weightKg ?? 0);
+      if (value > 0) spots.add(FlSpot(i.toDouble(), value));
+    }
+    if (spots.isEmpty) {
+      return const Center(child: Text('Sin datos'));
+    }
+
+    final minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final pad = (maxY - minY) * 0.15;
+
+    return LineChart(
+      LineChartData(
+        minY: (minY - pad).clamp(0, double.infinity),
+        maxY: maxY + pad + 0.0001,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (_) => FlLine(
+            color: scheme.outlineVariant,
+            strokeWidth: 1,
+          ),
+        ),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(),
+          rightTitles: const AxisTitles(),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 28,
+              interval: (logs.length / 4).ceilToDouble().clamp(1, 999),
+              getTitlesWidget: (value, meta) {
+                final i = value.toInt();
+                if (i < 0 || i >= logs.length) return const SizedBox.shrink();
+                final d = logs[i].date;
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    DateFormat('d/M').format(d),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 36,
+              getTitlesWidget: (value, meta) {
+                if (value == meta.max || value == meta.min) {
+                  return const SizedBox.shrink();
+                }
+                final txt = isDuration
+                    ? '${(value / 60).toStringAsFixed(0)}m'
+                    : value.toStringAsFixed(0);
+                return Text(
+                  txt,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            curveSmoothness: 0.25,
+            color: scheme.primary,
+            barWidth: 3,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
+                radius: 3,
+                color: scheme.primary,
+                strokeWidth: 0,
+              ),
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              color: scheme.primary.withValues(alpha: 0.12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LogTile extends StatelessWidget {
+  const _LogTile({
+    required this.log,
+    required this.isDuration,
+    required this.onDelete,
+  });
+
+  final ExerciseLog log;
+  final bool isDuration;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dateFmt = DateFormat('d MMM yyyy', 'es');
+
+    String title;
+    if (isDuration && log.durationSeconds != null) {
+      final m = log.durationSeconds! ~/ 60;
+      final s = log.durationSeconds! % 60;
+      title = m > 0 ? '$m min ${s > 0 ? '$s s' : ''}'.trim() : '${s}s';
+    } else {
+      final w = log.weightKg ?? 0;
+      final wStr =
+      w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toStringAsFixed(1);
+      final reps = log.repsCompleted ?? 0;
+      final sets = log.setsCompleted ?? 0;
+      title = '$wStr kg · ${sets}x$reps';
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            DateFormat('d').format(log.date),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          '${dateFmt.format(log.date)}${log.notes != null && log.notes!.isNotEmpty ? ' · ${log.notes}' : ''}',
+        ),
+        trailing: IconButton(
+          icon: Icon(Icons.delete_outline, color: scheme.outline),
+          onPressed: onDelete,
+        ),
+      ),
+    );
+  }
+}

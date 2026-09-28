@@ -1,0 +1,42 @@
+name: lift_xto
+description: Lift.xto — App de seguimiento de gimnasio con sobrecarga progresiva, IMC y peso corporal.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  sqflite: ^2.3.3+1
+  path: ^1.8.3
+  path_provider: ^2.1.4
+  intl: ^0.19.0
+  fl_chart: ^0.68.0
+  shared_preferences: ^2.3.2
+  sqflite_common_ffi_web: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+
+# Al final del archivo, fuera de cualquier otra sección:
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+
+  # Adaptive icon para Android 8+ (foreground transparente sobre fondo navy)
+  adaptive_icon_background: "#1E3A8A"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+
+  # Quitar canal alpha en iOS (Apple lo requiere)
+  remove_alpha_ios: true
