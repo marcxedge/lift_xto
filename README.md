@@ -15,6 +15,21 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 - ✅ Almacenamiento 100% local con SQLite
 - ✅ Material 3 con paleta **azul marino** (seed `#1E3A8A`)
 - ✅ Toggle **claro / oscuro / sistema** persistente con `SharedPreferences`
+
+## Capturas de pantalla
+
+| Rutina semanal | Ejercicios del día | Progresión + PR |
+|---|---|---|
+| ![Rutina semanal](docs/screenshots/rutina_semanal.png) | ![Ejercicios del día](docs/screenshots/dia_ejercicios.png) | ![Detalle de ejercicio](docs/screenshots/detalle_ejercicio.png) |
+
+| Récords personales | Peso corporal | IMC |
+|---|---|---|
+| ![Progreso y PRs](docs/screenshots/progreso_prs.png) | ![Peso corporal](docs/screenshots/peso_corporal.png) | ![Calculadora de IMC](docs/screenshots/imc.png) |
+
+| Tema claro |
+|---|
+| ![Tema claro](docs/screenshots/tema_claro.png) |
+
 ## Estructura
  
 ```
