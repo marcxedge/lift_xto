@@ -18,6 +18,7 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 - ✅ Arquitectura en capas (Repository + Observer) con inyección de dependencias vía `provider`
 - ✅ Validación de rangos centralizada y feedback visible de errores
 - ✅ Backups de Android deshabilitados y build de release minificado/ofuscado
+- ✅ Sincronización opcional offline-first con Firebase (Google Sign-In + Firestore), patrón outbox
 
 ## Capturas de pantalla
 
@@ -94,6 +95,9 @@ lib/
 │   ├── exercise_log_repository.dart   # CRUD logs + PR + resumen de progreso
 │   ├── body_weight_repository.dart    # CRUD peso corporal
 │   └── profile_repository.dart        # Perfil de usuario
+├── sync/
+│   ├── auth_repository.dart        # Google Sign-In (firebase_auth), degrada sin Firebase
+│   └── sync_service.dart           # Push/pull outbox contra Firestore
 ├── models/
 │   ├── exercise.dart
 │   ├── exercise_log.dart
@@ -112,6 +116,8 @@ lib/
 │   ├── log_entry_sheet.dart        # Bottom sheet para registrar peso
 │   ├── body_weight_sheet.dart      # Bottom sheet para peso corporal
 │   ├── profile_sheet.dart          # Bottom sheet del perfil
+│   ├── account_sheet.dart          # Bottom sheet de cuenta/sincronización
+│   ├── sync_status_button.dart     # Ícono ☁️ de estado de sync en el AppBar
 │   ├── state_views.dart            # LoadingView + EmptyStateView reutilizables
 │   └── theme_toggle_button.dart    # Botón AppBar para alternar tema
 └── utils/
@@ -164,16 +170,72 @@ user_profile (id, height_cm, age, gender)
  
 Las foreign keys están activas (`PRAGMA foreign_keys = ON`), así que eliminar un ejercicio borra en cascada todo su historial. El archivo de la BD se llama `lift_xto.db`.
 
+## Sincronización (Firebase, opcional)
+
+SQLite sigue siendo la **única fuente de verdad**: la app funciona 100%
+igual sin conexión, y toda lectura de la UI pasa siempre por los
+repositorios locales. La sincronización con Firestore es un agregado
+opcional detrás de Google Sign-In, con patrón **outbox**:
+
+```
+Escritura local (repo.add/update/delete)
+   │  DatabaseHelper marca sync_status='pending' + updated_at=ahora
+   ▼
+SyncService.requestSync()  (fire-and-forget, no bloquea la UI)
+   │  si hay sesión + conexión →
+   ├─ push: sube filas 'pending' a users/{uid}/{colección}/{sync_id}
+   ├─ push: propaga tombstones (borrados) como {deleted:true}
+   └─ pull: trae docs con updatedAt > lastSyncedAt, upsert local
+            por sync_id con last-write-wins
+```
+
+- **`sync_id`** (UUID v4 generado en el cliente) identifica cada fila entre
+  dispositivos — el `id INTEGER AUTOINCREMENT` local sigue existiendo sólo
+  para las foreign keys de SQLite, nunca sale del dispositivo.
+- **`sync_status`** (`pending` | `synced`) es lo que le da nombre al patrón
+  outbox: cada escritura queda "pendiente de envío" hasta confirmarse.
+- **Borrados**: en vez de un `DELETE` directo, se guarda un *tombstone*
+  (`sync_tombstones`) que al pushearse marca el documento remoto como
+  `{deleted: true}` — así otro dispositivo que haga `pull` se entera del
+  borrado y también lo aplica localmente.
+- **Conflictos**: *last-write-wins* comparando `updated_at`
+  (`remoteWinsConflict()` en `lib/sync/sync_service.dart`, testeada en
+  `test/sync/sync_service_test.dart`) — sin merge de campos, gana el cambio
+  más reciente. Suficiente para un tracker personal con baja probabilidad de
+  edición simultánea real.
+- **Disparadores**: al iniciar sesión, al recuperar conexión
+  (`connectivity_plus`), después de cada escritura local, o manualmente
+  desde el botón ☁️ del AppBar → "Sincronizar ahora".
+- **Sin Firebase configurado**: `Firebase.initializeApp()` está envuelto en
+  `try/catch` en `main.dart` — si falla (por ejemplo, con el
+  `google-services.json` de ejemplo), la app sigue funcionando 100% local y
+  el botón de cuenta muestra "Sincronización no configurada" en vez de
+  crashear.
+
+### Configurar tu propio Firebase
+
+1. Crear un proyecto en [Firebase Console](https://console.firebase.google.com).
+2. Agregar una app Android con `applicationId` = `com.example.lift_xto`.
+3. Sacar el SHA-1 de tu keystore de debug (`cd android && ./gradlew signingReport`) y cargarlo en la app Android de Firebase — si no, Google Sign-In falla con `DEVELOPER_ERROR`.
+4. Habilitar **Authentication → Sign-in method → Google**.
+5. Habilitar **Firestore Database** y pegar las reglas de [`firestore.rules`](firestore.rules) en la consola.
+6. Descargar `google-services.json` y ponerlo en `android/app/` (está en `.gitignore`; hay un `google-services.json.example` como referencia de formato).
+
 ## Seguridad
 
-La app no tiene backend ni hace ninguna llamada de red (no pide el permiso
-`INTERNET` en el manifest), pero como guarda datos de salud (peso, estatura,
-edad) localmente, igual vale endurecerla:
+La app no requiere conexión para funcionar (no pide el permiso `INTERNET`
+por sí misma — Firebase lo agrega sólo si configurás sincronización), y
+como guarda datos de salud (peso, estatura, edad) localmente, vale
+endurecerla igual:
 
 - **SQL parametrizado**: todas las queries de `DatabaseHelper` usan
   `where`/`whereArgs` (o placeholders `?` en los `rawQuery`), nunca
   interpolación de strings — cero superficie de SQL injection, aunque la
   fuente sea 100% local.
+- **Reglas de Firestore por usuario** (`firestore.rules`): cada documento
+  vive bajo `users/{uid}/...` y sólo es legible/escribible por ese mismo
+  `uid` autenticado (`request.auth.uid == uid`) — un usuario nunca puede ver
+  ni tocar los datos de otro, aunque conociera su `uid`.
 - **Validación de rangos** (`lib/utils/validators.dart`): antes se podía
   guardar un peso de 999999 kg o una edad de 500 años (sólo se chequeaba
   `n >= 0`). Ahora cada campo tiene un rango físicamente razonable (peso
@@ -238,4 +300,12 @@ flutter test
 - `test/models/`: serialización de los modelos (`toMap`/`fromMap`).
 - `test/utils/validators_test.dart`: casos límite de cada validador.
 - `test/utils/constants_test.dart`: helpers de días de la semana.
-- `test/widget_test.dart`: smoke test — la app monta sin excepciones.
+- `test/database/database_helper_migration_test.dart`: la migración v2→v3
+  (columnas de sync) no pierde datos y backfillea correctamente, usando
+  `sqflite_common_ffi` (SQLite de escritorio, sin depender de un
+  dispositivo/emulador).
+- `test/sync/sync_service_test.dart`: resolución de conflictos
+  *last-write-wins* (`remoteWinsConflict`), sin tocar Firestore.
+- `test/widget_test.dart`: smoke test — la app monta sin excepciones, con
+  Firebase deshabilitado (como un clon fresco sin `google-services.json`
+  real).

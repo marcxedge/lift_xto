@@ -6,6 +6,7 @@ import '../repositories/exercise_log_repository.dart';
 import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
+import '../widgets/sync_status_button.dart';
 import '../widgets/theme_toggle_button.dart';
 import 'muscle_map_tab.dart';
 import 'exercise_detail_screen.dart';
@@ -61,7 +62,7 @@ class _ProgressScreenState extends State<ProgressScreen>
         titleTextStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
           fontWeight: FontWeight.bold,
         ),
-        actions: const [ThemeToggleButton()],
+        actions: const [SyncStatusButton(), ThemeToggleButton()],
         bottom: TabBar(
           controller: _tab,
           tabs: const [

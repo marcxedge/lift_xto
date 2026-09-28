@@ -18,12 +18,19 @@ dependencies:
   shared_preferences: ^2.3.2
   sqflite_common_ffi_web: ^1.1.1
   provider: ^6.1.2
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
+  google_sign_in: ^6.2.1
+  connectivity_plus: ^6.1.0
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
   flutter_launcher_icons: ^0.14.1
+  sqflite_common_ffi: ^2.3.3
 
 flutter:
   uses-material-design: true

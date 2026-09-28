@@ -4,6 +4,7 @@ import '../core/app_exception.dart';
 import '../database/database_helper.dart';
 import '../models/exercise.dart';
 import '../models/exercise_log.dart';
+import '../sync/sync_service.dart';
 
 /// Resumen agregado (PR, último registro, sesiones) de un ejercicio. Usado
 /// por la tab de Progreso.
@@ -52,9 +53,10 @@ class MuscleVolumeLog {
 /// embebidas como `rawQuery` dentro de las pantallas de Progreso y Mapa
 /// Muscular — moverlas acá separa la lógica de datos de la de presentación.
 class ExerciseLogRepository extends ChangeNotifier {
-  ExerciseLogRepository(this._db);
+  ExerciseLogRepository(this._db, [this._sync]);
 
   final DatabaseHelper _db;
+  final SyncService? _sync;
 
   Future<List<ExerciseLog>> logsForExercise(int exerciseId) async {
     try {
@@ -76,6 +78,7 @@ class ExerciseLogRepository extends ChangeNotifier {
     try {
       await _db.insertExerciseLog(log);
       notifyListeners();
+      _sync?.requestSync();
     } catch (e) {
       throw AppException('No se pudo guardar el registro.', cause: e);
     }
@@ -85,6 +88,7 @@ class ExerciseLogRepository extends ChangeNotifier {
     try {
       await _db.deleteExerciseLog(id);
       notifyListeners();
+      _sync?.requestSync();
     } catch (e) {
       throw AppException('No se pudo eliminar el registro.', cause: e);
     }

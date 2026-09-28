@@ -8,6 +8,7 @@ import '../repositories/profile_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
 import '../widgets/profile_sheet.dart';
+import '../widgets/sync_status_button.dart';
 import '../widgets/theme_toggle_button.dart';
 import 'day_exercises_screen.dart';
 
@@ -104,7 +105,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
             );
           },
         ),
-        actions: const [ThemeToggleButton()],
+        actions: const [SyncStatusButton(), ThemeToggleButton()],
       ),
       body: FutureBuilder<Map<int, List<Exercise>>>(
         future: _future,

@@ -42,3 +42,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Config de Firebase real (contiene el project ID de TU proyecto). Copiá
+# google-services.json.example a google-services.json y completá con los
+# datos de tu propio proyecto de Firebase — ver README → Sincronización.
+/android/app/google-services.json
+/ios/Runner/GoogleService-Info.plist

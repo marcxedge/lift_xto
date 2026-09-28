@@ -3,14 +3,16 @@ import 'package:flutter/foundation.dart';
 import '../core/app_exception.dart';
 import '../database/database_helper.dart';
 import '../models/body_weight_log.dart';
+import '../sync/sync_service.dart';
 
 /// Repositorio de peso corporal. Ver [ExerciseRepository] para el
 /// razonamiento del patrón (envuelve [DatabaseHelper], notifica en cada
 /// escritura).
 class BodyWeightRepository extends ChangeNotifier {
-  BodyWeightRepository(this._db);
+  BodyWeightRepository(this._db, [this._sync]);
 
   final DatabaseHelper _db;
+  final SyncService? _sync;
 
   Future<List<BodyWeightLog>> getAll() async {
     try {
@@ -32,6 +34,7 @@ class BodyWeightRepository extends ChangeNotifier {
     try {
       await _db.insertBodyWeight(log);
       notifyListeners();
+      _sync?.requestSync();
     } catch (e) {
       throw AppException('No se pudo guardar el registro.', cause: e);
     }
@@ -41,6 +44,7 @@ class BodyWeightRepository extends ChangeNotifier {
     try {
       await _db.deleteBodyWeight(id);
       notifyListeners();
+      _sync?.requestSync();
     } catch (e) {
       throw AppException('No se pudo eliminar el registro.', cause: e);
     }

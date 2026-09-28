@@ -11,6 +11,7 @@ import '../utils/feedback.dart';
 import '../widgets/body_weight_sheet.dart';
 import '../widgets/profile_sheet.dart';
 import '../widgets/state_views.dart';
+import '../widgets/sync_status_button.dart';
 import '../widgets/theme_toggle_button.dart';
 
 class BodyScreen extends StatefulWidget {
@@ -44,7 +45,7 @@ class _BodyScreenState extends State<BodyScreen>
         titleTextStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
           fontWeight: FontWeight.bold,
         ),
-        actions: const [ThemeToggleButton()],
+        actions: const [SyncStatusButton(), ThemeToggleButton()],
         bottom: TabBar(
           controller: _tab,
           tabs: const [

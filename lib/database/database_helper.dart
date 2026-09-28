@@ -1,5 +1,6 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/exercise.dart';
 import '../models/exercise_log.dart';
@@ -13,7 +14,18 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'lift_xto.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
+  static const _uuid = Uuid();
+
+  /// Tablas que participan de la sincronización con Firestore (ver
+  /// `lib/sync/sync_service.dart`). Todas comparten las 4 columnas de
+  /// sincronización: sync_id, sync_status, updated_at, deleted.
+  static const syncTables = [
+    'exercises',
+    'exercise_logs',
+    'body_weight_logs',
+    'user_profile',
+  ];
 
   Database? _db;
 
@@ -35,6 +47,15 @@ class DatabaseHelper {
     );
   }
 
+  /// Columnas de sincronización comunes a toda tabla en [syncTables]. Se
+  /// agregan al final del `CREATE TABLE` de cada una.
+  static const _syncColumnsSql = '''
+        sync_id TEXT,
+        sync_status TEXT NOT NULL DEFAULT 'pending',
+        updated_at TEXT,
+        deleted INTEGER NOT NULL DEFAULT 0
+  ''';
+
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE exercises (
@@ -48,7 +69,8 @@ class DatabaseHelper {
         duration_seconds_max INTEGER,
         tracking_type TEXT NOT NULL DEFAULT 'weight',
         order_index INTEGER NOT NULL DEFAULT 0,
-        notes TEXT
+        notes TEXT,
+        $_syncColumnsSql
       )
     ''');
 
@@ -62,6 +84,7 @@ class DatabaseHelper {
         reps_completed INTEGER,
         duration_seconds INTEGER,
         notes TEXT,
+        $_syncColumnsSql,
         FOREIGN KEY (exercise_id) REFERENCES exercises (id) ON DELETE CASCADE
       )
     ''');
@@ -71,7 +94,8 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
         weight_kg REAL NOT NULL,
-        notes TEXT
+        notes TEXT,
+        $_syncColumnsSql
       )
     ''');
 
@@ -82,9 +106,12 @@ class DatabaseHelper {
         last_name TEXT,
         height_cm REAL,
         age INTEGER,
-        gender TEXT
+        gender TEXT,
+        $_syncColumnsSql
       )
     ''');
+
+    await _createTombstonesTable(db);
 
     // Índices útiles
     await db.execute(
@@ -97,13 +124,26 @@ class DatabaseHelper {
       'CREATE INDEX idx_bw_date ON body_weight_logs(date)',
     );
 
-    // Seed: rutina por defecto + perfil vacío
+    // Seed: rutina por defecto + perfil vacío, ya con datos de sync para
+    // que una instalación nueva quede lista para sincronizar desde el
+    // primer inicio de sesión.
     final batch = db.batch();
     for (final ex in DefaultRoutine.all()) {
-      batch.insert('exercises', ex.toMap());
+      batch.insert('exercises', _stampForInsert(ex.toMap()));
     }
-    batch.insert('user_profile', const UserProfile().toMap());
+    batch.insert('user_profile', _stampForInsert(const UserProfile().toMap()));
     await batch.commit(noResult: true);
+  }
+
+  Future<void> _createTombstonesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE sync_tombstones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        sync_id TEXT NOT NULL,
+        deleted_at TEXT NOT NULL
+      )
+    ''');
   }
 
   /// Migraciones incrementales. Cada bloque `if (oldVersion < N)` aplica los
@@ -114,6 +154,90 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE user_profile ADD COLUMN first_name TEXT');
       await db.execute('ALTER TABLE user_profile ADD COLUMN last_name TEXT');
     }
+    if (oldVersion < 3) {
+      // v3: columnas de sincronización con Firestore + tabla de tombstones
+      // para propagar borrados. El backfill genera un UUID v4 por fila
+      // existente directamente en SQL (randomblob), sin loop en Dart.
+      for (final table in syncTables) {
+        await db.execute('ALTER TABLE $table ADD COLUMN sync_id TEXT');
+        await db.execute(
+          "ALTER TABLE $table ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'",
+        );
+        await db.execute('ALTER TABLE $table ADD COLUMN updated_at TEXT');
+        await db.execute(
+          'ALTER TABLE $table ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0',
+        );
+        await db.execute('''
+          UPDATE $table SET
+            sync_id = lower(
+              hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' ||
+              substr(hex(randomblob(2)), 2) || '-' ||
+              substr('89ab', abs(random()) % 4 + 1, 1) ||
+              substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))
+            ),
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+            sync_status = 'pending'
+          WHERE sync_id IS NULL
+        ''');
+      }
+      await _createTombstonesTable(db);
+    }
+  }
+
+  // ───────────────────────── SYNC STAMPING HELPERS ─────────────────────────
+
+  /// Marca un mapa recién armado desde un modelo (que no conoce nada de
+  /// sync) como una escritura local nueva: le asigna `sync_id` si no tenía,
+  /// `sync_status = 'pending'` y `updated_at = ahora`.
+  static Map<String, Object?> _stampForInsert(Map<String, Object?> map) {
+    return {
+      ...map,
+      'sync_id': map['sync_id'] ?? _uuid.v4(),
+      'sync_status': 'pending',
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'deleted': 0,
+    };
+  }
+
+  /// Igual que arriba, pero para un `UPDATE` (no toca `sync_id`: `db.update`
+  /// sólo escribe las columnas presentes en el mapa, así que el `sync_id`
+  /// ya guardado en la fila queda intacto).
+  static Map<String, Object?> _stampForUpdate(Map<String, Object?> map) {
+    return {
+      ...map,
+      'sync_status': 'pending',
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+  }
+
+  /// Para upserts tipo `INSERT OR REPLACE` (perfil): a diferencia de
+  /// `UPDATE`, `REPLACE` reescribe la fila entera, así que hay que traer el
+  /// `sync_id` existente a mano para no perderlo.
+  Future<Map<String, Object?>> _stampForReplace(
+    Database db,
+    String table,
+    Object id,
+    Map<String, Object?> map,
+  ) async {
+    final existing = await db.query(
+      table,
+      columns: ['sync_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    final existingSyncId =
+        existing.isNotEmpty ? existing.first['sync_id'] as String? : null;
+    return _stampForInsert({...map, 'sync_id': existingSyncId});
+  }
+
+  Future<void> _tombstone(Database db, String table, String? syncId) async {
+    if (syncId == null) return;
+    await db.insert('sync_tombstones', {
+      'table_name': table,
+      'sync_id': syncId,
+      'deleted_at': DateTime.now().toUtc().toIso8601String(),
+    });
   }
 
   // ─────────────────────────── EXERCISES ───────────────────────────
@@ -144,7 +268,7 @@ class DatabaseHelper {
   Future<int> insertExercise(Exercise exercise) async {
     final db = await database;
     // Auto-asigna order_index al final del día si no se especificó
-    final map = exercise.toMap();
+    final map = _stampForInsert(exercise.toMap());
     if (exercise.orderIndex == 0) {
       final result = await db.rawQuery(
         'SELECT COALESCE(MAX(order_index), -1) + 1 AS next_order '
@@ -160,7 +284,7 @@ class DatabaseHelper {
     final db = await database;
     return db.update(
       'exercises',
-      exercise.toMap(),
+      _stampForUpdate(exercise.toMap()),
       where: 'id = ?',
       whereArgs: [exercise.id],
     );
@@ -168,6 +292,28 @@ class DatabaseHelper {
 
   Future<int> deleteExercise(int id) async {
     final db = await database;
+    // Los logs de este ejercicio se borran en cascada a nivel SQLite; acá
+    // los "tombstoneamos" primero para poder propagar el borrado a
+    // Firestore también (la cascada no nos da la chance de hacerlo después).
+    final logRows = await db.query(
+      'exercise_logs',
+      columns: ['sync_id'],
+      where: 'exercise_id = ?',
+      whereArgs: [id],
+    );
+    for (final row in logRows) {
+      await _tombstone(db, 'exercise_logs', row['sync_id'] as String?);
+    }
+    final exRows = await db.query(
+      'exercises',
+      columns: ['sync_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (exRows.isNotEmpty) {
+      await _tombstone(db, 'exercises', exRows.first['sync_id'] as String?);
+    }
     return db.delete('exercises', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -175,14 +321,14 @@ class DatabaseHelper {
 
   Future<int> insertExerciseLog(ExerciseLog log) async {
     final db = await database;
-    return db.insert('exercise_logs', log.toMap());
+    return db.insert('exercise_logs', _stampForInsert(log.toMap()));
   }
 
   Future<int> updateExerciseLog(ExerciseLog log) async {
     final db = await database;
     return db.update(
       'exercise_logs',
-      log.toMap(),
+      _stampForUpdate(log.toMap()),
       where: 'id = ?',
       whereArgs: [log.id],
     );
@@ -190,6 +336,16 @@ class DatabaseHelper {
 
   Future<int> deleteExerciseLog(int id) async {
     final db = await database;
+    final rows = await db.query(
+      'exercise_logs',
+      columns: ['sync_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      await _tombstone(db, 'exercise_logs', rows.first['sync_id'] as String?);
+    }
     return db.delete('exercise_logs', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -236,14 +392,14 @@ class DatabaseHelper {
 
   Future<int> insertBodyWeight(BodyWeightLog log) async {
     final db = await database;
-    return db.insert('body_weight_logs', log.toMap());
+    return db.insert('body_weight_logs', _stampForInsert(log.toMap()));
   }
 
   Future<int> updateBodyWeight(BodyWeightLog log) async {
     final db = await database;
     return db.update(
       'body_weight_logs',
-      log.toMap(),
+      _stampForUpdate(log.toMap()),
       where: 'id = ?',
       whereArgs: [log.id],
     );
@@ -251,6 +407,20 @@ class DatabaseHelper {
 
   Future<int> deleteBodyWeight(int id) async {
     final db = await database;
+    final rows = await db.query(
+      'body_weight_logs',
+      columns: ['sync_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      await _tombstone(
+        db,
+        'body_weight_logs',
+        rows.first['sync_id'] as String?,
+      );
+    }
     return db.delete('body_weight_logs', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -287,9 +457,15 @@ class DatabaseHelper {
 
   Future<int> upsertProfile(UserProfile profile) async {
     final db = await database;
+    final map = await _stampForReplace(
+      db,
+      'user_profile',
+      profile.id,
+      profile.toMap(),
+    );
     return db.insert(
       'user_profile',
-      profile.toMap(),
+      map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -333,5 +509,103 @@ class DatabaseHelper {
       ''',
       [since.toIso8601String().substring(0, 10)],
     );
+  }
+
+  // ─────────────────────────── SYNC SUPPORT ───────────────────────────
+  //
+  // Usado exclusivamente por `SyncService` (lib/sync/sync_service.dart).
+  // DatabaseHelper sólo expone plomería genérica por tabla; toda la lógica
+  // de qué hacer con esos datos (resolver FKs, decidir ganador de
+  // conflicto, hablar con Firestore) vive en la capa de sync, no acá.
+
+  Future<List<Map<String, Object?>>> getPendingRows(String table) async {
+    final db = await database;
+    return db.query(table, where: 'sync_status = ?', whereArgs: ['pending']);
+  }
+
+  Future<void> markSynced(String table, int id) async {
+    final db = await database;
+    await db.update(
+      table,
+      {'sync_status': 'synced'},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> countPendingRows() async {
+    final db = await database;
+    var total = 0;
+    for (final table in syncTables) {
+      final result = await db.rawQuery(
+        'SELECT COUNT(*) AS c FROM $table WHERE sync_status = ?',
+        ['pending'],
+      );
+      total += (result.first['c'] as int?) ?? 0;
+    }
+    final tombstones = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM sync_tombstones',
+    );
+    total += (tombstones.first['c'] as int?) ?? 0;
+    return total;
+  }
+
+  /// Inserta o actualiza una fila local a partir de un documento remoto ya
+  /// normalizado a columnas de [table] (incluyendo `sync_id` y
+  /// `updated_at` en el mismo formato ISO8601 UTC que se usa localmente),
+  /// resolviendo por `sync_id`. Si la fila local es igual o más nueva, no
+  /// la pisa (last-write-wins). Devuelve el `id` local o `null` si no
+  /// tenía `sync_id`.
+  Future<int?> upsertFromRemote(
+    String table,
+    Map<String, Object?> remoteRow,
+  ) async {
+    final db = await database;
+    final syncId = remoteRow['sync_id'] as String?;
+    if (syncId == null) return null;
+
+    final existing = await db.query(
+      table,
+      where: 'sync_id = ?',
+      whereArgs: [syncId],
+      limit: 1,
+    );
+    final row = Map<String, Object?>.from(remoteRow)
+      ..['sync_status'] = 'synced';
+
+    if (existing.isEmpty) {
+      row.remove('id');
+      return db.insert(table, row);
+    }
+
+    final localId = existing.first['id'] as int;
+    final localUpdatedAt = existing.first['updated_at'] as String?;
+    final remoteUpdatedAt = remoteRow['updated_at'] as String?;
+    if (localUpdatedAt != null &&
+        remoteUpdatedAt != null &&
+        localUpdatedAt.compareTo(remoteUpdatedAt) >= 0) {
+      return localId; // local es igual o más nuevo: no se pisa
+    }
+
+    row['id'] = localId;
+    await db.update(table, row, where: 'id = ?', whereArgs: [localId]);
+    return localId;
+  }
+
+  /// Borra localmente (si existe) la fila con este `sync_id` — usado al
+  /// detectar en `pull()` que otro dispositivo la eliminó.
+  Future<void> hardDeleteBySyncId(String table, String syncId) async {
+    final db = await database;
+    await db.delete(table, where: 'sync_id = ?', whereArgs: [syncId]);
+  }
+
+  Future<List<Map<String, Object?>>> getTombstones() async {
+    final db = await database;
+    return db.query('sync_tombstones');
+  }
+
+  Future<void> clearTombstone(int id) async {
+    final db = await database;
+    await db.delete('sync_tombstones', where: 'id = ?', whereArgs: [id]);
   }
 }

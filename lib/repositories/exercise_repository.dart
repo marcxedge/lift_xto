@@ -3,15 +3,20 @@ import 'package:flutter/foundation.dart';
 import '../core/app_exception.dart';
 import '../database/database_helper.dart';
 import '../models/exercise.dart';
+import '../sync/sync_service.dart';
 
 /// Repositorio de ejercicios. Envuelve [DatabaseHelper] (que ya usa SQL
 /// parametrizado) y notifica a los listeners después de cada escritura para
 /// que cualquier pantalla que dependa de la lista de ejercicios se entere
 /// sin necesidad de recargar la app (patrón Observer).
 class ExerciseRepository extends ChangeNotifier {
-  ExerciseRepository(this._db);
+  ExerciseRepository(this._db, [this._sync]);
 
   final DatabaseHelper _db;
+  // Opcional: si está presente, cada escritura local le avisa "hay algo
+  // pendiente" (fire-and-forget). El repositorio sigue sin saber nada de
+  // Firestore — sólo empuja el aviso.
+  final SyncService? _sync;
 
   Future<List<Exercise>> getByDay(int dayOfWeek) async {
     try {
@@ -33,6 +38,7 @@ class ExerciseRepository extends ChangeNotifier {
     try {
       await _db.insertExercise(exercise);
       notifyListeners();
+      _sync?.requestSync();
     } catch (e) {
       throw AppException('No se pudo crear el ejercicio.', cause: e);
     }
@@ -42,6 +48,7 @@ class ExerciseRepository extends ChangeNotifier {
     try {
       await _db.updateExercise(exercise);
       notifyListeners();
+      _sync?.requestSync();
     } catch (e) {
       throw AppException('No se pudo guardar el ejercicio.', cause: e);
     }
@@ -51,6 +58,7 @@ class ExerciseRepository extends ChangeNotifier {
     try {
       await _db.deleteExercise(id);
       notifyListeners();
+      _sync?.requestSync();
     } catch (e) {
       throw AppException('No se pudo eliminar el ejercicio.', cause: e);
     }
