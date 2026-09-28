@@ -293,4 +293,45 @@ class DatabaseHelper {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
+
+  // ─────────────────────────── AGGREGATE QUERIES ───────────────────────────
+
+  /// Fila cruda por ejercicio con su PR, último registro y conteo de
+  /// sesiones, en un solo viaje a la base. Usado por
+  /// `ExerciseLogRepository.progressSummary()`.
+  Future<List<Map<String, Object?>>> getAllExerciseProgress() async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT
+        e.*,
+        (SELECT MAX(weight_kg) FROM exercise_logs l WHERE l.exercise_id = e.id) AS pr_weight,
+        (SELECT MAX(duration_seconds) FROM exercise_logs l WHERE l.exercise_id = e.id) AS pr_duration,
+        (SELECT COUNT(*) FROM exercise_logs l WHERE l.exercise_id = e.id) AS log_count,
+        (SELECT MAX(date) FROM exercise_logs l WHERE l.exercise_id = e.id) AS last_date,
+        (SELECT weight_kg FROM exercise_logs l WHERE l.exercise_id = e.id ORDER BY date DESC LIMIT 1) AS last_weight,
+        (SELECT duration_seconds FROM exercise_logs l WHERE l.exercise_id = e.id ORDER BY date DESC LIMIT 1) AS last_duration
+      FROM exercises e
+      ORDER BY e.day_of_week ASC, e.order_index ASC
+    ''');
+  }
+
+  /// Logs de un período junto con nombre/tipo del ejercicio asociado. Usado
+  /// por `ExerciseLogRepository.logsWithExerciseSince()` para el mapa
+  /// muscular.
+  Future<List<Map<String, Object?>>> getLogsWithExerciseSince(
+    DateTime since,
+  ) async {
+    final db = await database;
+    return db.rawQuery(
+      '''
+      SELECT
+        l.weight_kg, l.sets_completed, l.reps_completed, l.duration_seconds,
+        e.name, e.tracking_type
+      FROM exercise_logs l
+      JOIN exercises e ON e.id = l.exercise_id
+      WHERE l.date >= ?
+      ''',
+      [since.toIso8601String().substring(0, 10)],
+    );
+  }
 }

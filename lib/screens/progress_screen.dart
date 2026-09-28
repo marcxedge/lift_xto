@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
-import '../models/exercise.dart';
+import '../repositories/exercise_log_repository.dart';
+import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
+import '../utils/feedback.dart';
 import '../widgets/theme_toggle_button.dart';
 import 'muscle_map_tab.dart';
 import 'exercise_detail_screen.dart';
@@ -18,59 +20,37 @@ class ProgressScreen extends StatefulWidget {
 
 class _ProgressScreenState extends State<ProgressScreen>
     with SingleTickerProviderStateMixin {
-  final _db = DatabaseHelper.instance;
-  late Future<List<_ExerciseProgress>> _future;
+  late final ExerciseRepository _exercises;
+  late final ExerciseLogRepository _logs;
+  late Future<List<ExerciseProgress>> _future;
   late final TabController _tab;
 
   @override
   void initState() {
     super.initState();
-    _future = _loadProgress();
+    _exercises = context.read<ExerciseRepository>();
+    _logs = context.read<ExerciseLogRepository>();
+    _future = _logs.progressSummary();
     _tab = TabController(length: 2, vsync: this);
+    // El resumen depende tanto de la lista de ejercicios como de sus logs,
+    // así que escuchamos ambos repositorios (patrón Observer).
+    _exercises.addListener(_refresh);
+    _logs.addListener(_refresh);
   }
 
   @override
   void dispose() {
+    _exercises.removeListener(_refresh);
+    _logs.removeListener(_refresh);
     _tab.dispose();
     super.dispose();
   }
 
   void _refresh() {
+    if (!mounted) return;
     setState(() {
-      _future = _loadProgress();
+      _future = _logs.progressSummary();
     });
-  }
-
-  Future<List<_ExerciseProgress>> _loadProgress() async {
-    final db = await _db.database;
-
-    // Trae todos los ejercicios con su PR y último log de un solo viaje.
-    final rows = await db.rawQuery('''
-      SELECT
-        e.*,
-        (SELECT MAX(weight_kg) FROM exercise_logs l WHERE l.exercise_id = e.id) AS pr_weight,
-        (SELECT MAX(duration_seconds) FROM exercise_logs l WHERE l.exercise_id = e.id) AS pr_duration,
-        (SELECT COUNT(*) FROM exercise_logs l WHERE l.exercise_id = e.id) AS log_count,
-        (SELECT MAX(date) FROM exercise_logs l WHERE l.exercise_id = e.id) AS last_date,
-        (SELECT weight_kg FROM exercise_logs l WHERE l.exercise_id = e.id ORDER BY date DESC LIMIT 1) AS last_weight,
-        (SELECT duration_seconds FROM exercise_logs l WHERE l.exercise_id = e.id ORDER BY date DESC LIMIT 1) AS last_duration
-      FROM exercises e
-      ORDER BY e.day_of_week ASC, e.order_index ASC
-    ''');
-
-    return rows.map((row) {
-      return _ExerciseProgress(
-        exercise: Exercise.fromMap(row),
-        prWeight: (row['pr_weight'] as num?)?.toDouble(),
-        prDuration: row['pr_duration'] as int?,
-        logCount: (row['log_count'] as int?) ?? 0,
-        lastDate: row['last_date'] == null
-            ? null
-            : DateTime.parse(row['last_date'] as String),
-        lastWeight: (row['last_weight'] as num?)?.toDouble(),
-        lastDuration: row['last_duration'] as int?,
-      );
-    }).toList();
   }
 
   @override
@@ -101,9 +81,14 @@ class _ProgressScreenState extends State<ProgressScreen>
   }
 
   Widget _buildPRsTab() {
-    return FutureBuilder<List<_ExerciseProgress>>(
+    return FutureBuilder<List<ExerciseProgress>>(
       future: _future,
       builder: (context, snap) {
+        if (snap.hasError) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) showErrorSnackBar(context, snap.error!);
+          });
+        }
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -170,7 +155,6 @@ class _ProgressScreenState extends State<ProgressScreen>
                           ),
                         ),
                       );
-                      _refresh();
                     },
                   ),
                 ),
@@ -194,7 +178,6 @@ class _ProgressScreenState extends State<ProgressScreen>
                           ),
                         ),
                       );
-                      _refresh();
                     },
                   ),
                 ),
@@ -207,30 +190,10 @@ class _ProgressScreenState extends State<ProgressScreen>
   }
 }
 
-class _ExerciseProgress {
-  final Exercise exercise;
-  final double? prWeight;
-  final int? prDuration;
-  final int logCount;
-  final DateTime? lastDate;
-  final double? lastWeight;
-  final int? lastDuration;
-
-  _ExerciseProgress({
-    required this.exercise,
-    required this.prWeight,
-    required this.prDuration,
-    required this.logCount,
-    required this.lastDate,
-    required this.lastWeight,
-    required this.lastDuration,
-  });
-}
-
 class _ProgressTile extends StatelessWidget {
   const _ProgressTile({required this.progress, required this.onTap});
 
-  final _ExerciseProgress progress;
+  final ExerciseProgress progress;
   final VoidCallback onTap;
 
   @override

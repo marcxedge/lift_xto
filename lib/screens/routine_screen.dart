@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
 import '../models/exercise.dart';
 import '../models/user_profile.dart';
+import '../repositories/exercise_repository.dart';
+import '../repositories/profile_repository.dart';
 import '../utils/constants.dart';
+import '../utils/feedback.dart';
 import '../widgets/profile_sheet.dart';
 import '../widgets/theme_toggle_button.dart';
 import 'day_exercises_screen.dart';
@@ -16,29 +19,48 @@ class RoutineScreen extends StatefulWidget {
 }
 
 class _RoutineScreenState extends State<RoutineScreen> {
-  final _db = DatabaseHelper.instance;
+  late final ExerciseRepository _exercises;
+  late final ProfileRepository _profile;
   late Future<Map<int, List<Exercise>>> _future;
   late Future<UserProfile> _profileFuture;
 
   @override
   void initState() {
     super.initState();
+    _exercises = context.read<ExerciseRepository>();
+    _profile = context.read<ProfileRepository>();
     _future = _loadAllDays();
-    _profileFuture = _db.getProfile();
+    _profileFuture = _loadProfile();
+    // Patrón Observer: cualquier pantalla que escriba a través de estos
+    // repositorios (agregar un ejercicio, editar el perfil) notifica acá
+    // aunque esta pantalla esté "de fondo" dentro del IndexedStack del
+    // HomeScreen, sin necesitar reiniciar la app.
+    _exercises.addListener(_refresh);
+    _profile.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _exercises.removeListener(_refresh);
+    _profile.removeListener(_refresh);
+    super.dispose();
   }
 
   Future<Map<int, List<Exercise>>> _loadAllDays() async {
     final result = <int, List<Exercise>>{};
     for (var day = 1; day <= 7; day++) {
-      result[day] = await _db.getExercisesByDay(day);
+      result[day] = await _exercises.getByDay(day);
     }
     return result;
   }
 
+  Future<UserProfile> _loadProfile() => _profile.get();
+
   void _refresh() {
+    if (!mounted) return;
     setState(() {
       _future = _loadAllDays();
-      _profileFuture = _db.getProfile();
+      _profileFuture = _loadProfile();
     });
   }
 
@@ -51,7 +73,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
   }
 
   Future<void> _openProfile(UserProfile profile) async {
-    final saved = await showModalBottomSheet<bool>(
+    await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: false,
@@ -60,18 +82,9 @@ class _RoutineScreenState extends State<RoutineScreen> {
       ),
       builder: (_) => ProfileSheet(profile: profile),
     );
-    if (saved == true) _refresh();
+    // No hace falta refrescar a mano: si se guardó, ProfileRepository ya
+    // notificó a _refresh vía el listener registrado en initState.
   }
-
-  static const _dayTitles = {
-    1: 'Push + Cardio',
-    2: 'Legs + Abs',
-    3: 'Descanso o actividad libre',
-    4: 'Pull + Cardio',
-    5: 'Legs + Abs',
-    6: 'Trote / Cardio opcional',
-    7: 'Descanso',
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -96,33 +109,40 @@ class _RoutineScreenState extends State<RoutineScreen> {
       body: FutureBuilder<Map<int, List<Exercise>>>(
         future: _future,
         builder: (context, snap) {
+          if (snap.hasError) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) showErrorSnackBar(context, snap.error!);
+            });
+          }
           if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           final data = snap.data!;
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            itemCount: 7,
-            itemBuilder: (context, i) {
-              final day = i + 1;
-              final exercises = data[day] ?? const [];
-              final isToday = day == today;
-              return _DayCard(
-                day: day,
-                //title: _dayTitles[day] ?? '',
-                title: 'Ver detalles',
-                exercises: exercises,
-                isToday: isToday,
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => DayExercisesScreen(dayOfWeek: day),
-                    ),
-                  );
-                  _refresh();
-                },
-              );
-            },
+          return RefreshIndicator(
+            onRefresh: () async => _refresh(),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              itemCount: 7,
+              itemBuilder: (context, i) {
+                final day = i + 1;
+                final exercises = data[day] ?? const [];
+                final isToday = day == today;
+                return _DayCard(
+                  day: day,
+                  title: 'Ver detalles',
+                  exercises: exercises,
+                  isToday: isToday,
+                  onTap: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => DayExercisesScreen(dayOfWeek: day),
+                      ),
+                    );
+                    // Idem: ExerciseRepository ya notificó si hubo cambios.
+                  },
+                );
+              },
+            ),
           );
         },
       ),

@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
 import '../models/exercise.dart';
 import '../models/exercise_log.dart';
+import '../repositories/exercise_log_repository.dart';
+import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
+import '../utils/feedback.dart';
 import '../utils/muscle_groups.dart';
 import '../widgets/log_entry_sheet.dart';
 import '../widgets/muscle_chip.dart';
+import '../widgets/state_views.dart';
 
 class ExerciseDetailScreen extends StatefulWidget {
   const ExerciseDetailScreen({super.key, required this.exerciseId});
@@ -20,49 +24,67 @@ class ExerciseDetailScreen extends StatefulWidget {
 }
 
 class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
-  final _db = DatabaseHelper.instance;
+  late final ExerciseRepository _exercises;
+  late final ExerciseLogRepository _logs;
   Exercise? _exercise;
-  List<ExerciseLog> _logs = const [];
+  List<ExerciseLog> _logsData = const [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    _exercises = context.read<ExerciseRepository>();
+    _logs = context.read<ExerciseLogRepository>();
     _load();
+    _logs.addListener(_load);
+  }
+
+  @override
+  void dispose() {
+    _logs.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
-    final ex = await _db.getExercise(widget.exerciseId);
-    final logs = await _db.getLogsForExercise(widget.exerciseId);
-    setState(() {
-      _exercise = ex;
-      _logs = logs;
-      _loading = false;
-    });
+    try {
+      final ex = await _exercises.getById(widget.exerciseId);
+      final logs = await _logs.logsForExercise(widget.exerciseId);
+      if (!mounted) return;
+      setState(() {
+        _exercise = ex;
+        _logsData = logs;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      showErrorSnackBar(context, e);
+    }
   }
 
   Future<void> _addLog() async {
     if (_exercise == null) return;
-    final saved = await showModalBottomSheet<bool>(
+    await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (_) => LogEntrySheet(exercise: _exercise!),
     );
-    if (saved == true) _load();
+    // ExerciseLogRepository ya notificó y _load() se disparó solo.
   }
 
   Future<void> _deleteLog(ExerciseLog log) async {
     if (log.id == null) return;
-    await _db.deleteExerciseLog(log.id!);
-    _load();
+    try {
+      await _logs.delete(log.id!);
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: LoadingView());
     }
     final ex = _exercise;
     if (ex == null) {
@@ -140,9 +162,9 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _StatsRow(logs: _logs, isDuration: isDuration),
+          _StatsRow(logs: _logsData, isDuration: isDuration),
           const SizedBox(height: 16),
-          if (_logs.length >= 2) ...[
+          if (_logsData.length >= 2) ...[
             Text(
               'Progreso',
               style: Theme.of(context).textTheme.titleMedium,
@@ -153,7 +175,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
               child: Card(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(8, 24, 16, 8),
-                  child: _ProgressChart(logs: _logs, isDuration: isDuration),
+                  child: _ProgressChart(logs: _logsData, isDuration: isDuration),
                 ),
               ),
             ),
@@ -164,33 +186,20 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          if (_logs.isEmpty)
-            Card(
+          if (_logsData.isEmpty)
+            const Card(
               child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.timeline,
-                        size: 48,
-                        color: scheme.outline,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text('Sin registros aún'),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Toca "Registrar" para empezar tu sobrecarga progresiva.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: scheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
+                padding: EdgeInsets.all(8),
+                child: EmptyStateView(
+                  icon: Icons.timeline,
+                  title: 'Sin registros aún',
+                  subtitle:
+                      'Toca "Registrar" para empezar tu sobrecarga progresiva.',
                 ),
               ),
             )
           else
-            ..._logs.reversed.map(
+            ..._logsData.reversed.map(
                   (log) => _LogTile(
                 log: log,
                 isDuration: isDuration,

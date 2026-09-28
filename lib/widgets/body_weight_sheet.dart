@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
 import '../models/body_weight_log.dart';
+import '../repositories/body_weight_repository.dart';
+import '../utils/feedback.dart';
+import '../utils/validators.dart';
 
 class BodyWeightSheet extends StatefulWidget {
   const BodyWeightSheet({super.key});
@@ -14,19 +17,21 @@ class BodyWeightSheet extends StatefulWidget {
 
 class _BodyWeightSheetState extends State<BodyWeightSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _db = DatabaseHelper.instance;
+  late final BodyWeightRepository _repo;
   final _weight = TextEditingController();
   final _notes = TextEditingController();
   DateTime _date = DateTime.now();
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+    _repo = context.read<BodyWeightRepository>();
     _prefillLast();
   }
 
   Future<void> _prefillLast() async {
-    final last = await _db.getLatestBodyWeight();
+    final last = await _repo.getLatest();
     if (last != null && mounted) {
       _weight.text = _fmt(last.weightKg);
     }
@@ -53,11 +58,19 @@ class _BodyWeightSheetState extends State<BodyWeightSheet> {
     if (!_formKey.currentState!.validate()) return;
     final log = BodyWeightLog(
       date: _date,
-      weightKg: double.parse(_weight.text.trim().replaceAll(',', '.')),
+      weightKg: Validators.parseDecimal(_weight.text.trim())!,
       notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
     );
-    await _db.insertBodyWeight(log);
-    if (mounted) Navigator.of(context).pop(true);
+    setState(() => _saving = true);
+    try {
+      await _repo.add(log);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        showErrorSnackBar(context, e);
+      }
+    }
   }
 
   String _fmt(double v) =>
@@ -117,16 +130,16 @@ class _BodyWeightSheetState extends State<BodyWeightSheet> {
                   labelText: 'Peso (kg)',
                   prefixIcon: Icon(Icons.monitor_weight),
                 ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Requerido';
-                  final n = double.tryParse(v.trim().replaceAll(',', '.'));
-                  if (n == null || n <= 0 || n > 500) return 'Inválido';
-                  return null;
-                },
+                validator: (v) => Validators.weight(
+                  v,
+                  min: Validators.bodyWeightMin,
+                  max: Validators.bodyWeightMax,
+                ),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _notes,
+                maxLength: Validators.notesMaxLength,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   labelText: 'Notas (opcional)',
@@ -136,8 +149,14 @@ class _BodyWeightSheetState extends State<BodyWeightSheet> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _save,
-                  icon: const Icon(Icons.save),
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
                   label: const Text('Guardar'),
                 ),
               ),

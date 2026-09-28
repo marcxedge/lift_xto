@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
 import '../models/exercise.dart';
+import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
+import '../utils/feedback.dart';
 import '../utils/muscle_groups.dart';
 import '../widgets/muscle_chip.dart';
+import '../widgets/state_views.dart';
 import 'add_edit_exercise_screen.dart';
 import 'exercise_detail_screen.dart';
 
@@ -18,32 +21,40 @@ class DayExercisesScreen extends StatefulWidget {
 }
 
 class _DayExercisesScreenState extends State<DayExercisesScreen> {
-  final _db = DatabaseHelper.instance;
+  late final ExerciseRepository _repo;
   late Future<List<Exercise>> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = _db.getExercisesByDay(widget.dayOfWeek);
+    _repo = context.read<ExerciseRepository>();
+    _future = _repo.getByDay(widget.dayOfWeek);
+    _repo.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _repo.removeListener(_refresh);
+    super.dispose();
   }
 
   void _refresh() {
+    if (!mounted) return;
     setState(() {
-      _future = _db.getExercisesByDay(widget.dayOfWeek);
+      _future = _repo.getByDay(widget.dayOfWeek);
     });
   }
 
   Future<void> _addExercise() async {
-    final created = await Navigator.of(context).push<bool>(
+    await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => AddEditExerciseScreen(dayOfWeek: widget.dayOfWeek),
       ),
     );
-    if (created == true) _refresh();
   }
 
   Future<void> _editExercise(Exercise exercise) async {
-    final updated = await Navigator.of(context).push<bool>(
+    await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => AddEditExerciseScreen(
           dayOfWeek: widget.dayOfWeek,
@@ -51,7 +62,6 @@ class _DayExercisesScreenState extends State<DayExercisesScreen> {
         ),
       ),
     );
-    if (updated == true) _refresh();
   }
 
   Future<void> _deleteExercise(Exercise exercise) async {
@@ -79,8 +89,11 @@ class _DayExercisesScreenState extends State<DayExercisesScreen> {
       ),
     );
     if (confirmed == true && exercise.id != null) {
-      await _db.deleteExercise(exercise.id!);
-      _refresh();
+      try {
+        await _repo.delete(exercise.id!);
+      } catch (e) {
+        if (mounted) showErrorSnackBar(context, e);
+      }
     }
   }
 
@@ -96,39 +109,21 @@ class _DayExercisesScreenState extends State<DayExercisesScreen> {
       body: FutureBuilder<List<Exercise>>(
         future: _future,
         builder: (context, snap) {
+          if (snap.hasError) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) showErrorSnackBar(context, snap.error!);
+            });
+          }
           if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingView();
           }
           final exercises = snap.data!;
           if (exercises.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.sports_gymnastics,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Día libre',
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Toca el botón "Agregar" para incluir ejercicios en este día.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            return const EmptyStateView(
+              icon: Icons.sports_gymnastics,
+              title: 'Día libre',
+              subtitle:
+                  'Toca el botón "Agregar" para incluir ejercicios en este día.',
             );
           }
           return ListView.separated(
@@ -145,7 +140,6 @@ class _DayExercisesScreenState extends State<DayExercisesScreen> {
                       builder: (_) => ExerciseDetailScreen(exerciseId: ex.id!),
                     ),
                   );
-                  _refresh();
                 },
                 onEdit: () => _editExercise(ex),
                 onDelete: () => _deleteExercise(ex),

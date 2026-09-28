@@ -35,6 +35,16 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Minifica y ofusca el bytecode Kotlin/Java (no afecta al código
+            // Dart, que ya se compila a nativo con `flutter build`), y quita
+            // recursos no usados. Reduce superficie de reverse engineering y
+            // tamaño del APK.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

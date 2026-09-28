@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
 import '../models/body_weight_log.dart';
 import '../models/user_profile.dart';
+import '../repositories/body_weight_repository.dart';
+import '../repositories/profile_repository.dart';
+import '../utils/feedback.dart';
 import '../widgets/body_weight_sheet.dart';
 import '../widgets/profile_sheet.dart';
+import '../widgets/state_views.dart';
 import '../widgets/theme_toggle_button.dart';
 
 class BodyScreen extends StatefulWidget {
@@ -71,7 +75,7 @@ class _BodyWeightTab extends StatefulWidget {
 
 class _BodyWeightTabState extends State<_BodyWeightTab>
     with AutomaticKeepAliveClientMixin {
-  final _db = DatabaseHelper.instance;
+  late final BodyWeightRepository _repo;
   late Future<List<BodyWeightLog>> _future;
 
   @override
@@ -80,28 +84,37 @@ class _BodyWeightTabState extends State<_BodyWeightTab>
   @override
   void initState() {
     super.initState();
-    _future = _db.getAllBodyWeights();
+    _repo = context.read<BodyWeightRepository>();
+    _future = _repo.getAll();
+    _repo.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _repo.removeListener(_refresh);
+    super.dispose();
   }
 
   void _refresh() {
-    setState(() {
-      _future = _db.getAllBodyWeights();
-    });
+    if (!mounted) return;
+    setState(() => _future = _repo.getAll());
   }
 
   Future<void> _add() async {
-    final saved = await showModalBottomSheet<bool>(
+    await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (_) => const BodyWeightSheet(),
     );
-    if (saved == true) _refresh();
   }
 
   Future<void> _delete(BodyWeightLog log) async {
     if (log.id == null) return;
-    await _db.deleteBodyWeight(log.id!);
-    _refresh();
+    try {
+      await _repo.delete(log.id!);
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
+    }
   }
 
   @override
@@ -116,41 +129,21 @@ class _BodyWeightTabState extends State<_BodyWeightTab>
       body: FutureBuilder<List<BodyWeightLog>>(
         future: _future,
         builder: (context, snap) {
+          if (snap.hasError) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) showErrorSnackBar(context, snap.error!);
+            });
+          }
           if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingView();
           }
           final logs = snap.data!;
           if (logs.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.monitor_weight_outlined,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Aún no registras tu peso',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Empieza tu seguimiento corporal con un primer registro.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            return const EmptyStateView(
+              icon: Icons.monitor_weight_outlined,
+              title: 'Aún no registras tu peso',
+              subtitle:
+                  'Empieza tu seguimiento corporal con un primer registro.',
             );
           }
 
@@ -158,9 +151,11 @@ class _BodyWeightTabState extends State<_BodyWeightTab>
           final first = logs.first;
           final delta = last.weightKg - first.weightKg;
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            children: [
+          return RefreshIndicator(
+            onRefresh: () async => _refresh(),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              children: [
               Row(
                 children: [
                   Expanded(
@@ -208,7 +203,8 @@ class _BodyWeightTabState extends State<_BodyWeightTab>
               ...logs.reversed.map(
                     (l) => _BodyWeightTile(log: l, onDelete: () => _delete(l)),
               ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -429,9 +425,9 @@ class _BmiTab extends StatefulWidget {
   State<_BmiTab> createState() => _BmiTabState();
 }
 
-class _BmiTabState extends State<_BmiTab>
-    with AutomaticKeepAliveClientMixin {
-  final _db = DatabaseHelper.instance;
+class _BmiTabState extends State<_BmiTab> with AutomaticKeepAliveClientMixin {
+  late final ProfileRepository _profileRepo;
+  late final BodyWeightRepository _weightRepo;
   UserProfile? _profile;
   BodyWeightLog? _latestWeight;
   bool _loading = true;
@@ -442,33 +438,50 @@ class _BmiTabState extends State<_BmiTab>
   @override
   void initState() {
     super.initState();
+    _profileRepo = context.read<ProfileRepository>();
+    _weightRepo = context.read<BodyWeightRepository>();
     _load();
+    _profileRepo.addListener(_load);
+    _weightRepo.addListener(_load);
+  }
+
+  @override
+  void dispose() {
+    _profileRepo.removeListener(_load);
+    _weightRepo.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
-    final p = await _db.getProfile();
-    final w = await _db.getLatestBodyWeight();
-    setState(() {
-      _profile = p;
-      _latestWeight = w;
-      _loading = false;
-    });
+    try {
+      final p = await _profileRepo.get();
+      final w = await _weightRepo.getLatest();
+      if (!mounted) return;
+      setState(() {
+        _profile = p;
+        _latestWeight = w;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      showErrorSnackBar(context, e);
+    }
   }
 
   Future<void> _editProfile() async {
-    final saved = await showModalBottomSheet<bool>(
+    await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (_) => ProfileSheet(profile: _profile ?? const UserProfile()),
     );
-    if (saved == true) _load();
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     final scheme = Theme.of(context).colorScheme;
     final p = _profile;
@@ -478,7 +491,7 @@ class _BmiTabState extends State<_BmiTab>
     double? bmi;
     if (canCalc) {
       final hM = p!.heightCm! / 100;
-      bmi = w!.weightKg / (hM * hM);
+      bmi = w.weightKg / (hM * hM);
     }
     final category = bmi == null ? null : _bmiCategory(bmi);
     final range = p?.heightCm == null ? null : _healthyRange(p!.heightCm!);

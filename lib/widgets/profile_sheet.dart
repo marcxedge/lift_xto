@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
 import '../models/user_profile.dart';
+import '../repositories/profile_repository.dart';
+import '../utils/feedback.dart';
+import '../utils/validators.dart';
 
 class ProfileSheet extends StatefulWidget {
   const ProfileSheet({super.key, required this.profile});
@@ -15,16 +18,18 @@ class ProfileSheet extends StatefulWidget {
 
 class _ProfileSheetState extends State<ProfileSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _db = DatabaseHelper.instance;
+  late final ProfileRepository _repo;
   late final TextEditingController _firstName;
   late final TextEditingController _lastName;
   late final TextEditingController _height;
   late final TextEditingController _age;
   String? _gender;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+    _repo = context.read<ProfileRepository>();
     _firstName = TextEditingController(text: widget.profile.firstName ?? '');
     _lastName = TextEditingController(text: widget.profile.lastName ?? '');
     _height = TextEditingController(
@@ -49,9 +54,6 @@ class _ProfileSheetState extends State<ProfileSheet> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    // Pasamos cadena vacía para limpiar (el copyWith respeta null como
-    // "no tocar", así que si el usuario borra el campo guardamos null vía
-    // construcción directa más abajo si hace falta).
     final fn = _firstName.text.trim();
     final ln = _lastName.text.trim();
     final updated = UserProfile(
@@ -60,12 +62,20 @@ class _ProfileSheetState extends State<ProfileSheet> {
       lastName: ln.isEmpty ? null : ln,
       heightCm: _height.text.trim().isEmpty
           ? null
-          : double.parse(_height.text.trim().replaceAll(',', '.')),
+          : Validators.parseDecimal(_height.text.trim()),
       age: _age.text.trim().isEmpty ? null : int.parse(_age.text.trim()),
       gender: _gender,
     );
-    await _db.upsertProfile(updated);
-    if (mounted) Navigator.of(context).pop(true);
+    setState(() => _saving = true);
+    try {
+      await _repo.save(updated);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        showErrorSnackBar(context, e);
+      }
+    }
   }
 
   String _fmt(double v) =>
@@ -110,7 +120,11 @@ class _ProfileSheetState extends State<ProfileSheet> {
               TextFormField(
                 controller: _firstName,
                 textCapitalization: TextCapitalization.words,
-                inputFormatters: [LengthLimitingTextInputFormatter(40)],
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(
+                    Validators.shortTextMaxLength,
+                  ),
+                ],
                 decoration: const InputDecoration(
                   labelText: 'Nombre',
                   prefixIcon: Icon(Icons.person_outline),
@@ -120,7 +134,11 @@ class _ProfileSheetState extends State<ProfileSheet> {
               TextFormField(
                 controller: _lastName,
                 textCapitalization: TextCapitalization.words,
-                inputFormatters: [LengthLimitingTextInputFormatter(40)],
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(
+                    Validators.shortTextMaxLength,
+                  ),
+                ],
                 decoration: const InputDecoration(
                   labelText: 'Apellido',
                   prefixIcon: Icon(Icons.badge_outlined),
@@ -138,12 +156,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
                   labelText: 'Estatura (cm)',
                   prefixIcon: Icon(Icons.height),
                 ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
-                  final n = double.tryParse(v.trim().replaceAll(',', '.'));
-                  if (n == null || n < 80 || n > 260) return 'Inválido';
-                  return null;
-                },
+                validator: (v) => Validators.height(v),
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -154,12 +167,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
                   labelText: 'Edad (años)',
                   prefixIcon: Icon(Icons.cake_outlined),
                 ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
-                  final n = int.tryParse(v.trim());
-                  if (n == null || n < 5 || n > 120) return 'Inválido';
-                  return null;
-                },
+                validator: (v) => Validators.age(v),
               ),
               const SizedBox(height: 16),
               const Text('Sexo (opcional)'),
@@ -177,8 +185,14 @@ class _ProfileSheetState extends State<ProfileSheet> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _save,
-                  icon: const Icon(Icons.save),
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
                   label: const Text('Guardar'),
                 ),
               ),

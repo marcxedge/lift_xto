@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
-import '../models/exercise.dart';
+import '../repositories/exercise_log_repository.dart';
 import '../utils/muscle_groups.dart';
 import '../widgets/muscle_map.dart';
 
@@ -17,7 +17,7 @@ class MuscleMapTab extends StatefulWidget {
 
 class _MuscleMapTabState extends State<MuscleMapTab>
     with AutomaticKeepAliveClientMixin {
-  final _db = DatabaseHelper.instance;
+  late final ExerciseLogRepository _logs;
   late Future<_MapData> _future;
 
   /// Días hacia atrás considerados para calcular el volumen.
@@ -26,7 +26,20 @@ class _MuscleMapTabState extends State<MuscleMapTab>
   @override
   void initState() {
     super.initState();
+    _logs = context.read<ExerciseLogRepository>();
     _future = _load();
+    _logs.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _logs.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (!mounted) return;
+    setState(() => _future = _load());
   }
 
   @override
@@ -34,40 +47,28 @@ class _MuscleMapTabState extends State<MuscleMapTab>
 
   Future<_MapData> _load() async {
     final since = DateTime.now().subtract(Duration(days: _windowDays));
-    final db = await _db.database;
-
-    // Trae logs del período junto con el ejercicio asociado para tener el nombre
-    final rows = await db.rawQuery('''
-      SELECT
-        l.weight_kg, l.sets_completed, l.reps_completed, l.duration_seconds,
-        e.name, e.tracking_type
-      FROM exercise_logs l
-      JOIN exercises e ON e.id = l.exercise_id
-      WHERE l.date >= ?
-    ''', [since.toIso8601String().substring(0, 10)]);
+    final rows = await _logs.logsWithExerciseSince(since);
 
     // volumen acumulado por grupo muscular
     final volume = <MuscleGroup, double>{};
     int totalLogs = 0;
 
     for (final row in rows) {
-      final name = row['name'] as String;
-      final trackingType = row['tracking_type'] as String;
-      final assignment = MuscleDetector.detect(name);
+      final assignment = MuscleDetector.detect(row.exerciseName);
       if (assignment.isEmpty) continue;
 
       // Cómputo del "esfuerzo" del log
       double effort;
-      if (trackingType == 'duration') {
+      if (row.trackingType == 'duration') {
         // Para duración: segundos / 30 da una unidad razonable comparable
-        final secs = (row['duration_seconds'] as num?)?.toDouble() ?? 0;
+        final secs = row.durationSeconds ?? 0;
         if (secs <= 0) continue;
         effort = secs / 30.0;
       } else {
         // Para peso: peso × sets × reps
-        final w = (row['weight_kg'] as num?)?.toDouble() ?? 0;
-        final s = (row['sets_completed'] as num?)?.toDouble() ?? 0;
-        final r = (row['reps_completed'] as num?)?.toDouble() ?? 0;
+        final w = row.weightKg ?? 0;
+        final s = row.setsCompleted ?? 0;
+        final r = row.repsCompleted ?? 0;
         effort = w * s * r;
         if (effort <= 0) continue;
       }

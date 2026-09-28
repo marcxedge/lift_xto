@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
 import '../models/exercise.dart';
+import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
+import '../utils/feedback.dart';
+import '../utils/validators.dart';
 
 class AddEditExerciseScreen extends StatefulWidget {
   const AddEditExerciseScreen({
@@ -21,7 +24,7 @@ class AddEditExerciseScreen extends StatefulWidget {
 
 class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _db = DatabaseHelper.instance;
+  late final ExerciseRepository _repo;
 
   late final TextEditingController _name;
   late final TextEditingController _sets;
@@ -31,12 +34,14 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
   late final TextEditingController _durationMax;
   late final TextEditingController _notes;
   late String _trackingType;
+  bool _saving = false;
 
   bool get _isEditing => widget.exercise != null;
 
   @override
   void initState() {
     super.initState();
+    _repo = context.read<ExerciseRepository>();
     final ex = widget.exercise;
     _name = TextEditingController(text: ex?.name ?? '');
     _sets = TextEditingController(text: ex?.sets.toString() ?? '3');
@@ -92,12 +97,20 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
       notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
     );
 
-    if (_isEditing) {
-      await _db.updateExercise(exercise);
-    } else {
-      await _db.insertExercise(exercise);
+    setState(() => _saving = true);
+    try {
+      if (_isEditing) {
+        await _repo.update(exercise);
+      } else {
+        await _repo.add(exercise);
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        showErrorSnackBar(context, e);
+      }
     }
-    if (mounted) Navigator.of(context).pop(true);
   }
 
   @override
@@ -108,7 +121,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
         title: Text(_isEditing ? 'Editar ejercicio' : 'Nuevo ejercicio'),
         actions: [
           TextButton(
-            onPressed: _save,
+            onPressed: _saving ? null : _save,
             child: const Text('Guardar'),
           ),
         ],
@@ -129,13 +142,16 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
             TextFormField(
               controller: _name,
               textCapitalization: TextCapitalization.sentences,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(
+                  Validators.shortTextMaxLength,
+                ),
+              ],
               decoration: const InputDecoration(
                 labelText: 'Nombre del ejercicio',
                 prefixIcon: Icon(Icons.fitness_center),
               ),
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Ingresa un nombre'
-                  : null,
+              validator: Validators.requiredText,
             ),
             const SizedBox(height: 16),
             SegmentedButton<String>(
@@ -164,7 +180,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
                 labelText: 'Sets',
                 prefixIcon: Icon(Icons.repeat),
               ),
-              validator: _intValidator(min: 1, required: true),
+              validator: (v) => Validators.sets(v),
             ),
             const SizedBox(height: 16),
             if (!isDuration) ...[
@@ -180,7 +196,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Reps mín.',
                       ),
-                      validator: _intValidator(min: 1),
+                      validator: (v) => Validators.reps(v, required: false),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -194,7 +210,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Reps máx.',
                       ),
-                      validator: _intValidator(min: 1),
+                      validator: (v) => Validators.reps(v, required: false),
                     ),
                   ),
                 ],
@@ -213,7 +229,8 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
                         labelText: 'Duración mín. (s)',
                         helperText: 'En segundos',
                       ),
-                      validator: _intValidator(min: 1),
+                      validator: (v) =>
+                          Validators.durationSeconds(v, required: false),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -228,7 +245,8 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
                         labelText: 'Duración máx. (s)',
                         helperText: 'En segundos',
                       ),
-                      validator: _intValidator(min: 1),
+                      validator: (v) =>
+                          Validators.durationSeconds(v, required: false),
                     ),
                   ),
                 ],
@@ -238,6 +256,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
             TextFormField(
               controller: _notes,
               maxLines: 3,
+              maxLength: Validators.notesMaxLength,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Notas (opcional)',
@@ -246,25 +265,19 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.save),
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save),
               label: Text(_isEditing ? 'Guardar cambios' : 'Crear ejercicio'),
             ),
           ],
         ),
       ),
     );
-  }
-
-  String? Function(String?) _intValidator({int? min, bool required = false}) {
-    return (v) {
-      if (v == null || v.trim().isEmpty) {
-        return required ? 'Requerido' : null;
-      }
-      final n = int.tryParse(v.trim());
-      if (n == null) return 'Número inválido';
-      if (min != null && n < min) return 'Mínimo $min';
-      return null;
-    };
   }
 }

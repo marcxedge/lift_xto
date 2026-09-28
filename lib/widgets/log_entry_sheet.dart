@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../database/database_helper.dart';
 import '../models/exercise.dart';
 import '../models/exercise_log.dart';
+import '../repositories/exercise_log_repository.dart';
 import '../utils/constants.dart';
+import '../utils/feedback.dart';
+import '../utils/validators.dart';
 
 class LogEntrySheet extends StatefulWidget {
   const LogEntrySheet({super.key, required this.exercise});
@@ -18,7 +21,7 @@ class LogEntrySheet extends StatefulWidget {
 
 class _LogEntrySheetState extends State<LogEntrySheet> {
   final _formKey = GlobalKey<FormState>();
-  final _db = DatabaseHelper.instance;
+  late final ExerciseLogRepository _repo;
 
   final _weight = TextEditingController();
   final _sets = TextEditingController();
@@ -26,18 +29,20 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
   final _duration = TextEditingController();
   final _notes = TextEditingController();
   DateTime _date = DateTime.now();
+  bool _saving = false;
 
   ExerciseLog? _lastLog;
 
   @override
   void initState() {
     super.initState();
+    _repo = context.read<ExerciseLogRepository>();
     _prefillFromLast();
     _sets.text = widget.exercise.sets.toString();
   }
 
   Future<void> _prefillFromLast() async {
-    final last = await _db.getLastLog(widget.exercise.id!);
+    final last = await _repo.lastLog(widget.exercise.id!);
     if (last == null || !mounted) return;
     setState(() {
       _lastLog = last;
@@ -82,7 +87,7 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
       date: _date,
       weightKg: isDuration
           ? null
-          : double.parse(_weight.text.trim().replaceAll(',', '.')),
+          : Validators.parseDecimal(_weight.text.trim()),
       setsCompleted: int.tryParse(_sets.text.trim()),
       repsCompleted:
       isDuration ? null : int.tryParse(_reps.text.trim()),
@@ -91,8 +96,16 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
       notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
     );
 
-    await _db.insertExerciseLog(log);
-    if (mounted) Navigator.of(context).pop(true);
+    setState(() => _saving = true);
+    try {
+      await _repo.add(log);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        showErrorSnackBar(context, e);
+      }
+    }
   }
 
   String _fmt(double w) {
@@ -179,12 +192,7 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
                     labelText: 'Peso (kg)',
                     prefixIcon: Icon(Icons.fitness_center),
                   ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Requerido';
-                    final n = double.tryParse(v.trim().replaceAll(',', '.'));
-                    if (n == null || n < 0) return 'Inválido';
-                    return null;
-                  },
+                  validator: Validators.weight,
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -199,7 +207,7 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
                         decoration: const InputDecoration(
                           labelText: 'Sets realizados',
                         ),
-                        validator: _intValidator,
+                        validator: Validators.sets,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -213,7 +221,7 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
                         decoration: const InputDecoration(
                           labelText: 'Reps por set',
                         ),
-                        validator: _intValidator,
+                        validator: Validators.reps,
                       ),
                     ),
                   ],
@@ -228,7 +236,7 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
                     helperText: '60 = 1 min, 120 = 2 min, etc.',
                     prefixIcon: Icon(Icons.timer),
                   ),
-                  validator: _intValidator,
+                  validator: Validators.durationSeconds,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -238,11 +246,13 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
                   decoration: const InputDecoration(
                     labelText: 'Sets / repeticiones',
                   ),
+                  validator: (v) => Validators.sets(v, required: false),
                 ),
               ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: _notes,
+                maxLength: Validators.notesMaxLength,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   labelText: 'Notas (opcional)',
@@ -252,8 +262,14 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _save,
-                  icon: const Icon(Icons.save),
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
                   label: const Text('Guardar registro'),
                 ),
               ),
@@ -262,13 +278,6 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
         ),
       ),
     );
-  }
-
-  String? _intValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Requerido';
-    final n = int.tryParse(v.trim());
-    if (n == null || n < 0) return 'Inválido';
-    return null;
   }
 
   String _summarizeLast(ExerciseLog last, bool isDuration) {
