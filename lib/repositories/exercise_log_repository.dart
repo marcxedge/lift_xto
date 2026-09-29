@@ -5,6 +5,7 @@ import '../database/database_helper.dart';
 import '../models/exercise.dart';
 import '../models/exercise_log.dart';
 import '../sync/sync_service.dart';
+import '../utils/muscle_groups.dart';
 
 /// Resumen agregado (PR, último registro, sesiones) de un ejercicio. Usado
 /// por la tab de Progreso.
@@ -34,6 +35,7 @@ class MuscleVolumeLog {
   const MuscleVolumeLog({
     required this.exerciseName,
     required this.trackingType,
+    this.muscleGroup,
     this.weightKg,
     this.setsCompleted,
     this.repsCompleted,
@@ -42,6 +44,10 @@ class MuscleVolumeLog {
 
   final String exerciseName;
   final String trackingType;
+  /// Grupo muscular elegido a mano para el ejercicio, si lo tiene (ver
+  /// [Exercise.muscleGroup]). Si es `null`, el llamador debe caer a
+  /// `MuscleDetector.resolve(null, exerciseName)`.
+  final MuscleGroup? muscleGroup;
   final double? weightKg;
   final double? setsCompleted;
   final double? repsCompleted;
@@ -133,6 +139,7 @@ class ExerciseLogRepository extends ChangeNotifier {
             (row) => MuscleVolumeLog(
               exerciseName: row['name'] as String,
               trackingType: row['tracking_type'] as String,
+              muscleGroup: muscleGroupFromName(row['muscle_group'] as String?),
               weightKg: (row['weight_kg'] as num?)?.toDouble(),
               setsCompleted: (row['sets_completed'] as num?)?.toDouble(),
               repsCompleted: (row['reps_completed'] as num?)?.toDouble(),

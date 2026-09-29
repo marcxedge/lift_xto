@@ -1,4 +1,5 @@
 import '../utils/constants.dart';
+import '../utils/muscle_groups.dart';
 
 class Exercise {
   final int? id;
@@ -12,6 +13,7 @@ class Exercise {
   final String trackingType; // TrackingType.weight | TrackingType.duration
   final int orderIndex;
   final String? notes;
+  final MuscleGroup? muscleGroup;
 
   const Exercise({
     this.id,
@@ -25,7 +27,15 @@ class Exercise {
     this.trackingType = TrackingType.weight,
     this.orderIndex = 0,
     this.notes,
+    this.muscleGroup,
   });
+
+  /// Asignación muscular efectiva para mostrar en chips y alimentar el mapa
+  /// muscular: prioriza el grupo elegido a mano y cae a la detección por
+  /// nombre sólo para ejercicios viejos que nunca lo tuvieron seteado. Ver
+  /// [MuscleDetector.resolve].
+  MuscleAssignment get muscleAssignment =>
+      MuscleDetector.resolve(muscleGroup, name);
 
   Exercise copyWith({
     int? id,
@@ -39,6 +49,7 @@ class Exercise {
     String? trackingType,
     int? orderIndex,
     String? notes,
+    MuscleGroup? muscleGroup,
   }) {
     return Exercise(
       id: id ?? this.id,
@@ -52,6 +63,7 @@ class Exercise {
       trackingType: trackingType ?? this.trackingType,
       orderIndex: orderIndex ?? this.orderIndex,
       notes: notes ?? this.notes,
+      muscleGroup: muscleGroup ?? this.muscleGroup,
     );
   }
 
@@ -68,6 +80,7 @@ class Exercise {
       'tracking_type': trackingType,
       'order_index': orderIndex,
       'notes': notes,
+      'muscle_group': muscleGroup?.name,
     };
   }
 
@@ -84,6 +97,7 @@ class Exercise {
       trackingType: (map['tracking_type'] as String?) ?? TrackingType.weight,
       orderIndex: (map['order_index'] as int?) ?? 0,
       notes: map['notes'] as String?,
+      muscleGroup: muscleGroupFromName(map['muscle_group'] as String?),
     );
   }
 

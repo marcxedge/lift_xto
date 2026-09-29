@@ -9,7 +9,6 @@ import '../repositories/exercise_log_repository.dart';
 import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
-import '../utils/muscle_groups.dart';
 import '../widgets/log_entry_sheet.dart';
 import '../widgets/muscle_chip.dart';
 import '../widgets/state_views.dart';
@@ -146,7 +145,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                   ],
                   Builder(
                     builder: (_) {
-                      final assignment = MuscleDetector.detect(ex.name);
+                      final assignment = ex.muscleAssignment;
                       if (assignment.isEmpty) return const SizedBox.shrink();
                       return Padding(
                         padding: const EdgeInsets.only(top: 12),

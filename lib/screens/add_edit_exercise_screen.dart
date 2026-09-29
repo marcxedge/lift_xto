@@ -6,6 +6,7 @@ import '../models/exercise.dart';
 import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
+import '../utils/muscle_groups.dart';
 import '../utils/validators.dart';
 
 class AddEditExerciseScreen extends StatefulWidget {
@@ -34,6 +35,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
   late final TextEditingController _durationMax;
   late final TextEditingController _notes;
   late String _trackingType;
+  MuscleGroup? _muscleGroup;
   bool _saving = false;
 
   bool get _isEditing => widget.exercise != null;
@@ -58,6 +60,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
     );
     _notes = TextEditingController(text: ex?.notes ?? '');
     _trackingType = ex?.trackingType ?? TrackingType.weight;
+    _muscleGroup = ex?.muscleGroup;
   }
 
   @override
@@ -95,6 +98,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
       trackingType: _trackingType,
       orderIndex: widget.exercise?.orderIndex ?? 0,
       notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+      muscleGroup: _muscleGroup,
     );
 
     setState(() => _saving = true);
@@ -152,6 +156,21 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
                 prefixIcon: Icon(Icons.fitness_center),
               ),
               validator: Validators.requiredText,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<MuscleGroup>(
+              initialValue: _muscleGroup,
+              decoration: const InputDecoration(
+                labelText: 'Parte del cuerpo',
+                prefixIcon: Icon(Icons.accessibility_new),
+              ),
+              items: [
+                for (final group in MuscleGroup.values)
+                  DropdownMenuItem(value: group, child: Text(group.label)),
+              ],
+              onChanged: (value) => setState(() => _muscleGroup = value),
+              validator: (v) =>
+                  v == null ? 'Elige qué parte del cuerpo trabaja' : null,
             ),
             const SizedBox(height: 16),
             SegmentedButton<String>(

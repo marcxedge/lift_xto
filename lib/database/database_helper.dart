@@ -6,7 +6,7 @@ import '../models/exercise.dart';
 import '../models/exercise_log.dart';
 import '../models/body_weight_log.dart';
 import '../models/user_profile.dart';
-import 'default_routine.dart';
+import '../utils/muscle_groups.dart';
 
 /// Helper de SQLite. Singleton para mantener una sola conexión.
 class DatabaseHelper {
@@ -14,7 +14,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'lift_xto.db';
-  static const _dbVersion = 3;
+  static const _dbVersion = 4;
   static const _uuid = Uuid();
 
   /// Tablas que participan de la sincronización con Firestore (ver
@@ -70,6 +70,7 @@ class DatabaseHelper {
         tracking_type TEXT NOT NULL DEFAULT 'weight',
         order_index INTEGER NOT NULL DEFAULT 0,
         notes TEXT,
+        muscle_group TEXT,
         $_syncColumnsSql
       )
     ''');
@@ -124,15 +125,10 @@ class DatabaseHelper {
       'CREATE INDEX idx_bw_date ON body_weight_logs(date)',
     );
 
-    // Seed: rutina por defecto + perfil vacío, ya con datos de sync para
-    // que una instalación nueva quede lista para sincronizar desde el
-    // primer inicio de sesión.
-    final batch = db.batch();
-    for (final ex in DefaultRoutine.all()) {
-      batch.insert('exercises', _stampForInsert(ex.toMap()));
-    }
-    batch.insert('user_profile', _stampForInsert(const UserProfile().toMap()));
-    await batch.commit(noResult: true);
+    // Sin seed: una instalación nueva arranca sin ejercicios, para que cada
+    // usuario arme su propia rutina desde cero. `getProfile()` ya devuelve
+    // un `UserProfile` vacío si no hay fila, así que tampoco hace falta
+    // insertar un perfil placeholder acá.
   }
 
   Future<void> _createTombstonesTable(Database db) async {
@@ -181,6 +177,31 @@ class DatabaseHelper {
         ''');
       }
       await _createTombstonesTable(db);
+    }
+    if (oldVersion < 4) {
+      // v4: categorización muscular manual por ejercicio (antes se
+      // detectaba al vuelo por el nombre). Backfill best-effort con el
+      // detector existente para no perder el mapa muscular ya armado con
+      // los ejercicios que el usuario ya tenía cargados.
+      await db.execute('ALTER TABLE exercises ADD COLUMN muscle_group TEXT');
+      final rows = await db.query('exercises', columns: ['id', 'name']);
+      final now = DateTime.now().toUtc().toIso8601String();
+      final batch = db.batch();
+      for (final row in rows) {
+        final assignment = MuscleDetector.detect(row['name'] as String);
+        if (assignment.primary.isEmpty) continue;
+        batch.update(
+          'exercises',
+          {
+            'muscle_group': assignment.primary.first.name,
+            'sync_status': 'pending',
+            'updated_at': now,
+          },
+          where: 'id = ?',
+          whereArgs: [row['id']],
+        );
+      }
+      await batch.commit(noResult: true);
     }
   }
 
@@ -502,7 +523,7 @@ class DatabaseHelper {
       '''
       SELECT
         l.weight_kg, l.sets_completed, l.reps_completed, l.duration_seconds,
-        e.name, e.tracking_type
+        e.name, e.tracking_type, e.muscle_group
       FROM exercise_logs l
       JOIN exercises e ON e.id = l.exercise_id
       WHERE l.date >= ?

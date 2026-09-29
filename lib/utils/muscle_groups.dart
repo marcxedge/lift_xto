@@ -34,6 +34,19 @@ enum MuscleGroup {
   cardio,
 }
 
+/// Parsea el `.name` de un [MuscleGroup] guardado en SQLite/Firestore,
+/// devolviendo `null` en vez de tirar si es `null` o un valor desconocido
+/// (por ejemplo, un dato de una versión vieja de la app). Centralizado acá
+/// para no duplicar el mismo try/catch en cada `fromMap`.
+MuscleGroup? muscleGroupFromName(String? name) {
+  if (name == null) return null;
+  try {
+    return MuscleGroup.values.byName(name);
+  } on ArgumentError {
+    return null;
+  }
+}
+
 extension MuscleGroupX on MuscleGroup {
   /// Nombre legible para mostrar en chips/leyendas.
   String get label {
@@ -291,6 +304,18 @@ class MuscleDetector {
       primary: primary.toList(),
       secondary: secondary.toList(),
     );
+  }
+
+  /// Resuelve la asignación muscular "efectiva" de un ejercicio: si tiene un
+  /// grupo elegido a mano ([explicit], vía el combo de
+  /// `AddEditExerciseScreen`), ese es el único primario y gana siempre. Si
+  /// no, cae a la detección por nombre (compatibilidad con ejercicios
+  /// creados antes de que existiera el combo).
+  static MuscleAssignment resolve(MuscleGroup? explicit, String name) {
+    if (explicit != null) {
+      return MuscleAssignment(primary: [explicit], secondary: const []);
+    }
+    return detect(name);
   }
 }
 

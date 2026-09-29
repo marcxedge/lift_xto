@@ -5,7 +5,6 @@ import '../models/exercise.dart';
 import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
-import '../utils/muscle_groups.dart';
 import '../widgets/muscle_chip.dart';
 import '../widgets/state_views.dart';
 import 'add_edit_exercise_screen.dart';
@@ -213,8 +212,7 @@ class _ExerciseTile extends StatelessWidget {
                     ),
                     Builder(
                       builder: (_) {
-                        final assignment =
-                        MuscleDetector.detect(exercise.name);
+                        final assignment = exercise.muscleAssignment;
                         if (assignment.isEmpty) return const SizedBox.shrink();
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),

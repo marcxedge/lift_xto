@@ -39,7 +39,9 @@ class _MuscleMapTabState extends State<MuscleMapTab>
 
   void _refresh() {
     if (!mounted) return;
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
   }
 
   @override
@@ -54,7 +56,8 @@ class _MuscleMapTabState extends State<MuscleMapTab>
     int totalLogs = 0;
 
     for (final row in rows) {
-      final assignment = MuscleDetector.detect(row.exerciseName);
+      final assignment =
+          MuscleDetector.resolve(row.muscleGroup, row.exerciseName);
       if (assignment.isEmpty) continue;
 
       // Cómputo del "esfuerzo" del log
@@ -115,7 +118,11 @@ class _MuscleMapTabState extends State<MuscleMapTab>
     final scheme = Theme.of(context).colorScheme;
 
     return RefreshIndicator(
-      onRefresh: () async => setState(() => _future = _load()),
+      onRefresh: () async {
+        setState(() {
+          _future = _load();
+        });
+      },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [

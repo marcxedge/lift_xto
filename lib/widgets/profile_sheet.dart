@@ -111,7 +111,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Personalizá tu experiencia',
+                'Personaliza tu experiencia',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

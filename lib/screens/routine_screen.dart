@@ -121,31 +121,101 @@ class _RoutineScreenState extends State<RoutineScreen> {
           final data = snap.data!;
           return RefreshIndicator(
             onRefresh: () async => _refresh(),
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              itemCount: 7,
-              itemBuilder: (context, i) {
-                final day = i + 1;
-                final exercises = data[day] ?? const [];
-                final isToday = day == today;
-                return _DayCard(
-                  day: day,
-                  title: 'Ver detalles',
-                  exercises: exercises,
-                  isToday: isToday,
-                  onTap: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => DayExercisesScreen(dayOfWeek: day),
+              children: [
+                FutureBuilder<UserProfile>(
+                  future: _profileFuture,
+                  builder: (context, profileSnap) {
+                    final profile = profileSnap.data;
+                    // Sólo se sugiere completar el perfil si ya sabemos que
+                    // falta (no mientras carga) — evita un parpadeo.
+                    if (profile == null || profile.heightCm != null) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _ProfileNudgeCard(
+                        onTap: () => _openProfile(profile),
                       ),
                     );
-                    // Idem: ExerciseRepository ya notificó si hubo cambios.
                   },
-                );
-              },
+                ),
+                for (var day = 1; day <= 7; day++)
+                  _DayCard(
+                    day: day,
+                    title: 'Ver detalles',
+                    exercises: data[day] ?? const [],
+                    isToday: day == today,
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => DayExercisesScreen(dayOfWeek: day),
+                        ),
+                      );
+                      // Idem: ExerciseRepository ya notificó si hubo cambios.
+                    },
+                  ),
+              ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Aviso para completar el perfil (estatura, peso, edad) cuando todavía
+/// falta — se muestra al entrar a la app hasta que el usuario lo complete,
+/// porque el IMC y el seguimiento corporal dependen de esos datos.
+class _ProfileNudgeCard extends StatelessWidget {
+  const _ProfileNudgeCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.tertiaryContainer,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: scheme.onTertiaryContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Completa tu perfil',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onTertiaryContainer,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Agrega tu estatura y tu peso para calcular tu IMC y '
+                      'llevar un mejor seguimiento.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: scheme.onTertiaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right, color: scheme.onTertiaryContainer),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -305,7 +375,7 @@ class _GreetingTitle extends StatelessWidget {
     final initials = profile?.initials ?? '?';
 
     final mainText = hasName ? '$greeting, $firstName' : '¡Bienvenido!';
-    final subText = hasName ? 'Tu rutina semanal' : 'Tocá para configurar tu perfil';
+    final subText = hasName ? 'Tu rutina semanal' : 'Toca para configurar tu perfil';
 
     return Row(
       children: [

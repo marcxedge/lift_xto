@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
 
 import '../database/database_helper.dart';
 import 'auth_repository.dart';
@@ -273,9 +274,14 @@ class SyncService extends ChangeNotifier {
       return;
     }
 
-    await db.update(
+    // INSERT OR REPLACE en vez de UPDATE: en un dispositivo nuevo (o desde
+    // que `_onCreate` dejó de sembrar un perfil vacío) puede no existir
+    // todavía la fila id=1, y un UPDATE sobre una fila inexistente no hace
+    // nada — el perfil remoto se perdía silenciosamente en el primer pull.
+    await db.insert(
       'user_profile',
       {
+        'id': 1,
         'first_name': data['firstName'],
         'last_name': data['lastName'],
         'height_cm': data['heightCm'],
@@ -284,8 +290,7 @@ class SyncService extends ChangeNotifier {
         'updated_at': remoteUpdatedAt,
         'sync_status': 'synced',
       },
-      where: 'id = ?',
-      whereArgs: [1],
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
@@ -358,6 +363,7 @@ class SyncService extends ChangeNotifier {
         'trackingType': row['tracking_type'],
         'orderIndex': row['order_index'],
         'notes': row['notes'],
+        'muscleGroup': row['muscle_group'],
       };
 
   Map<String, Object?> _exerciseFromDoc(
@@ -377,6 +383,7 @@ class SyncService extends ChangeNotifier {
         'tracking_type': data['trackingType'],
         'order_index': data['orderIndex'],
         'notes': data['notes'],
+        'muscle_group': data['muscleGroup'],
       };
 
   Map<String, Object?> _bodyWeightToDoc(Map<String, Object?> row) => {

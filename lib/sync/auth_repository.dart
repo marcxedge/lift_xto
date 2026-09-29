@@ -32,12 +32,7 @@ class AuthRepository extends ChangeNotifier {
   bool get isSignedIn => currentUser != null;
 
   Future<void> signInWithGoogle() async {
-    if (!_firebaseAvailable) {
-      throw const AppException(
-        'La sincronización no está configurada en esta build. '
-        'Ver README → Sincronización.',
-      );
-    }
+    _ensureAvailable();
     try {
       final googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) return; // el usuario canceló el picker
@@ -52,6 +47,48 @@ class AuthRepository extends ChangeNotifier {
     }
   }
 
+  Future<void> registerWithEmail(String email, String password) async {
+    _ensureAvailable();
+    try {
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+    } on FirebaseAuthException catch (e) {
+      throw AppException(_messageForAuthError(e), cause: e);
+    } catch (e) {
+      throw AppException('No se pudo crear la cuenta.', cause: e);
+    }
+  }
+
+  Future<void> signInWithEmail(String email, String password) async {
+    _ensureAvailable();
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+    } on FirebaseAuthException catch (e) {
+      throw AppException(_messageForAuthError(e), cause: e);
+    } catch (e) {
+      throw AppException('No se pudo iniciar sesión.', cause: e);
+    }
+  }
+
+  Future<void> sendPasswordResetEmail(String email) async {
+    _ensureAvailable();
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email.trim());
+    } on FirebaseAuthException catch (e) {
+      throw AppException(_messageForAuthError(e), cause: e);
+    } catch (e) {
+      throw AppException(
+        'No se pudo enviar el correo de recuperación.',
+        cause: e,
+      );
+    }
+  }
+
   Future<void> signOut() async {
     if (!_firebaseAvailable) return;
     try {
@@ -59,6 +96,40 @@ class AuthRepository extends ChangeNotifier {
       await FirebaseAuth.instance.signOut();
     } catch (e) {
       throw AppException('No se pudo cerrar sesión.', cause: e);
+    }
+  }
+
+  void _ensureAvailable() {
+    if (!_firebaseAvailable) {
+      throw const AppException(
+        'La sincronización no está configurada en esta build. '
+        'Ver README → Sincronización.',
+      );
+    }
+  }
+
+  /// Traduce los códigos de `FirebaseAuthException` a mensajes en español
+  /// aptos para mostrar directo al usuario (ver `AppException`).
+  String _messageForAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return 'Ese correo ya tiene una cuenta. Inicia sesión en vez de crear una nueva.';
+      case 'weak-password':
+        return 'La contraseña es muy débil (mínimo 6 caracteres).';
+      case 'invalid-email':
+        return 'El correo no es válido.';
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Correo o contraseña incorrectos.';
+      case 'user-disabled':
+        return 'Esta cuenta fue deshabilitada.';
+      case 'too-many-requests':
+        return 'Demasiados intentos. Intenta de nuevo en unos minutos.';
+      case 'network-request-failed':
+        return 'Sin conexión. Revisa tu internet e intenta de nuevo.';
+      default:
+        return 'No se pudo completar la operación (${e.code}).';
     }
   }
 

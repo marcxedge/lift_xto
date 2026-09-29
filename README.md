@@ -4,35 +4,38 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
  
 ## Características
  
-- ✅ Rutina semanal precargada (Lunes a Sábado) con tu plan actual
+- ✅ Rutina semanal vacía por defecto (Lunes a Sábado) — cada usuario arma la suya desde cero
 - ✅ Editar / eliminar / agregar ejercicios en cualquier día (incluido Miércoles)
+- ✅ Categorización muscular manual: al crear un ejercicio elegís su grupo muscular (18 grupos específicos) desde un combo, en vez de depender de detectarlo por el nombre
+- ✅ Mapa muscular visual que refleja el volumen trabajado por grupo, usando esa categorización
 - ✅ Registro de peso (kg) × sets × reps por sesión
 - ✅ Registro de duración (segundos) para planchas y cardio
 - ✅ Gráfico de evolución por ejercicio con `fl_chart`
 - ✅ Récord personal (PR) y resumen de sesiones
-- ✅ Tracking de peso corporal con gráfico
-- ✅ Calculadora de IMC con peso saludable recomendado
+- ✅ Pantalla de Cuerpo unificada: peso actual, IMC, escala visual y rango saludable juntos en una sola vista (antes eran 2 tabs separadas)
+- ✅ Sugerencia de completar el perfil (estatura, peso) al entrar si todavía falta
 - ✅ Almacenamiento 100% local con SQLite
 - ✅ Material 3 con paleta **azul marino** (seed `#1E3A8A`)
-- ✅ Toggle **claro / oscuro / sistema** persistente con `SharedPreferences`
+- ✅ Modo **oscuro por defecto**, con toggle claro / oscuro / sistema persistente vía `SharedPreferences`
 - ✅ Arquitectura en capas (Repository + Observer) con inyección de dependencias vía `provider`
 - ✅ Validación de rangos centralizada y feedback visible de errores
 - ✅ Backups de Android deshabilitados y build de release minificado/ofuscado
-- ✅ Login obligatorio con Google + sincronización offline-first con Firebase (Firestore), patrón outbox
+- ✅ Login obligatorio con Google **o email/contraseña** + sincronización offline-first con Firebase (Firestore), patrón outbox
+- ✅ Multi-dispositivo: iniciar sesión en un dispositivo nuevo trae automáticamente toda tu data (rutina, progreso, peso, perfil)
 
 ## Capturas de pantalla
 
-| Rutina semanal | Ejercicios del día | Progresión + PR |
+| Login | Rutina semanal | Ejercicios del día |
 |---|---|---|
-| ![Rutina semanal](docs/screenshots/rutina_semanal.png) | ![Ejercicios del día](docs/screenshots/dia_ejercicios.png) | ![Detalle de ejercicio](docs/screenshots/detalle_ejercicio.png) |
+| ![Login](docs/screenshots/login.png) | ![Rutina semanal](docs/screenshots/rutina_semanal.png) | ![Ejercicios del día](docs/screenshots/dia_ejercicios.png) |
 
-| Récords personales | Peso corporal | IMC |
+| Detalle + PR | Récords personales | Mapa muscular |
 |---|---|---|
-| ![Progreso y PRs](docs/screenshots/progreso_prs.png) | ![Peso corporal](docs/screenshots/peso_corporal.png) | ![Calculadora de IMC](docs/screenshots/imc.png) |
+| ![Detalle de ejercicio](docs/screenshots/detalle_ejercicio.png) | ![Progreso y PRs](docs/screenshots/progreso_prs.png) | ![Mapa muscular](docs/screenshots/mapa_muscular.png) |
 
-| Tema claro |
+| Cuerpo (perfil + peso + IMC) |
 |---|
-| ![Tema claro](docs/screenshots/tema_claro.png) |
+| ![Cuerpo](docs/screenshots/cuerpo.png) |
 
 ## Arquitectura
 
@@ -89,15 +92,14 @@ lib/
 ├── core/
 │   └── app_exception.dart          # Excepción de dominio con mensaje user-friendly
 ├── database/
-│   ├── database_helper.dart        # SQLite singleton + CRUD + queries agregadas
-│   └── default_routine.dart        # Seed de tu rutina
+│   └── database_helper.dart        # SQLite singleton + CRUD + queries agregadas
 ├── repositories/
 │   ├── exercise_repository.dart       # CRUD ejercicios (ChangeNotifier)
 │   ├── exercise_log_repository.dart   # CRUD logs + PR + resumen de progreso
 │   ├── body_weight_repository.dart    # CRUD peso corporal
 │   └── profile_repository.dart        # Perfil de usuario
 ├── sync/
-│   ├── auth_repository.dart        # Google Sign-In (firebase_auth), degrada sin Firebase
+│   ├── auth_repository.dart        # Google Sign-In + email/contraseña (firebase_auth), degrada sin Firebase
 │   └── sync_service.dart           # Push/pull outbox contra Firestore
 ├── models/
 │   ├── exercise.dart
@@ -105,15 +107,15 @@ lib/
 │   ├── body_weight_log.dart
 │   └── user_profile.dart
 ├── screens/
-│   ├── login_screen.dart           # Puerta de acceso obligatoria (Google Sign-In)
+│   ├── login_screen.dart           # Puerta de acceso obligatoria (Google o email/contraseña)
 │   ├── home_screen.dart            # Bottom navigation
 │   ├── routine_screen.dart         # Vista de los 7 días
 │   ├── day_exercises_screen.dart   # Ejercicios de un día
 │   ├── add_edit_exercise_screen.dart
 │   ├── exercise_detail_screen.dart # Historial + gráfico + PR
 │   ├── progress_screen.dart        # Resumen de PRs + mapa muscular
-│   ├── muscle_map_tab.dart         # Mapa muscular por volumen
-│   └── body_screen.dart            # Tabs: Peso corporal | IMC
+│   ├── muscle_map_tab.dart         # Mapa muscular por volumen y grupo elegido a mano
+│   └── body_screen.dart            # Cuerpo: perfil + peso + IMC en una sola vista
 ├── widgets/
 │   ├── log_entry_sheet.dart        # Bottom sheet para registrar peso
 │   ├── body_weight_sheet.dart      # Bottom sheet para peso corporal
@@ -135,7 +137,7 @@ lib/
 ```bash
 flutter create lift_xto
 cd lift_xto
-# Reemplazá pubspec.yaml y la carpeta lib/ con los archivos de este proyecto
+# Reemplaza pubspec.yaml y la carpeta lib/ con los archivos de este proyecto
 flutter pub get
 flutter run
 ```
@@ -160,7 +162,7 @@ El `pubspec.yaml` define el package interno (`lift_xto`), pero el nombre que ve 
 ```sql
 exercises (id, day_of_week, name, sets, reps_min, reps_max,
            duration_seconds_min, duration_seconds_max,
-           tracking_type, order_index, notes)
+           tracking_type, order_index, notes, muscle_group)
  
 exercise_logs (id, exercise_id, date, weight_kg, sets_completed,
                reps_completed, duration_seconds, notes)
@@ -174,9 +176,12 @@ Las foreign keys están activas (`PRAGMA foreign_keys = ON`), así que eliminar 
 
 ## Sincronización (Firebase)
 
-El login con Google es **obligatorio**: `AuthGate` (`lib/main.dart`) muestra
-`LoginScreen` hasta que hay sesión, y recién ahí deja pasar a `HomeScreen`
-— ver `lib/screens/login_screen.dart`. Una vez logueado, todo funciona
+El login es **obligatorio** (con Google o con email/contraseña):
+`AuthGate` (`lib/main.dart`) muestra `LoginScreen` hasta que hay sesión, y
+recién ahí deja pasar a `HomeScreen` — ver `lib/screens/login_screen.dart`.
+Iniciar sesión en un dispositivo nuevo con la misma cuenta trae
+automáticamente toda la data existente (rutina, progreso, peso, perfil) vía
+el `pull` inicial descrito abajo. Una vez logueado, todo funciona
 offline con normalidad (sólo el login inicial necesita conexión); SQLite
 sigue siendo la **única fuente de verdad** para la UI, y toda lectura de
 pantalla pasa siempre por los repositorios locales. La sincronización con
@@ -230,7 +235,7 @@ SyncService.requestSync()  (fire-and-forget, no bloquea la UI)
 1. Crear un proyecto en [Firebase Console](https://console.firebase.google.com).
 2. Agregar una app Android con `applicationId` = `com.example.lift_xto`.
 3. Sacar el SHA-1 de tu keystore de debug (`cd android && ./gradlew signingReport`) y cargarlo en la app Android de Firebase — si no, Google Sign-In falla con `DEVELOPER_ERROR`.
-4. Habilitar **Authentication → Sign-in method → Google**.
+4. Habilitar **Authentication → Sign-in method → Google** y, si querés ofrecer también login por email/contraseña, **Email/Password**.
 5. Habilitar **Firestore Database** y pegar las reglas de [`firestore.rules`](firestore.rules) en la consola.
 6. Descargar `google-services.json` y ponerlo en `android/app/` (está en `.gitignore`; hay un `google-services.json.example` como referencia de formato).
 
@@ -269,21 +274,23 @@ datos de salud (peso, estatura, edad), vale endurecerla:
 
 ## Cómo funciona la sobrecarga progresiva
  
-1. Tocá un día de la semana → tocá un ejercicio.
-2. Pulsá **"Registrar"** y guardá peso × sets × reps de esa sesión.
-3. La próxima vez, el formulario auto-rellena los valores anteriores como referencia.
-4. La gráfica muestra la evolución y el card de **PR** marca tu récord absoluto.
+1. Toca un día de la semana → toca un ejercicio.
+2. Al crear el ejercicio, elige también qué parte del cuerpo trabaja (combo de 18 grupos musculares) — así se refleja en el Mapa muscular.
+3. Pulsa **"Registrar"** y guarda peso × sets × reps de esa sesión.
+4. La próxima vez, el formulario auto-rellena los valores anteriores como referencia.
+5. La gráfica muestra la evolución y el card de **PR** marca tu récord absoluto.
 ## Cómo funciona el IMC
  
-1. Pestaña **Cuerpo → IMC → Editar perfil** → ingresá estatura.
-2. Registrá tu peso en la pestaña **Peso corporal**.
-3. La pantalla calcula:
+1. Pestaña **Cuerpo → Editar** → ingresa tu estatura y edad.
+2. Registra tu peso desde el mismo botón "Registrar".
+3. La pantalla calcula, todo junto:
    - Tu IMC actual
    - Categoría (Bajo peso / Normal / Sobrepeso / Obesidad)
    - Rango de peso saludable para tu estatura (BMI 18.5–24.9)
 ## Tema claro / oscuro
  
-El icono en la AppBar (esquina superior derecha en cualquier tab) cicla entre tres estados:
+La app arranca en **modo oscuro por defecto**. El icono en la AppBar
+(esquina superior derecha en cualquier tab) cicla entre tres estados:
  
 | Icono | Modo | Comportamiento |
 |---|---|---|
@@ -301,7 +308,7 @@ La preferencia se persiste en `SharedPreferences` (key `theme_mode`) y se aplica
 - `IndexedStack` mantiene el estado de cada tab del bottom navigation; ya no
   es un problema que queden "de fondo" porque escuchan a los repositorios.
 - `AutomaticKeepAliveClientMixin` en las sub-tabs de Cuerpo para no recargar al hacer swipe.
-- Migrations preparadas: cuando incrementes `_dbVersion`, agregá la lógica en `onUpgrade`.
+- Migrations preparadas: cuando incrementes `_dbVersion`, agrega la lógica en `onUpgrade`.
 - Locale `es` inicializado en `main.dart` para `DateFormat`.
 
 ## Tests

@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../sync/auth_repository.dart';
 import '../utils/feedback.dart';
+import '../utils/validators.dart';
 
-/// Puerta de acceso obligatoria: sin sesión de Google no se entra a la app.
-/// `AuthGate` (en main.dart) decide entre esta pantalla y `HomeScreen` según
-/// `AuthRepository.isSignedIn` — acá sólo hace falta disparar el login;
-/// una vez que `signInWithGoogle()` cambia el estado de auth, `AuthGate`
+/// Puerta de acceso obligatoria: sin sesión no se entra a la app. Ofrece
+/// Google Sign-In o email/contraseña (con alta de cuenta y recuperación de
+/// contraseña). `AuthGate` (en main.dart) decide entre esta pantalla y
+/// `HomeScreen` según `AuthRepository.isSignedIn` — acá sólo hace falta
+/// disparar el login; una vez que cambia el estado de auth, `AuthGate`
 /// reacciona solo y navega a `HomeScreen`.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,17 +19,71 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  bool _signingIn = false;
+  final _formKey = GlobalKey<FormState>();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
 
-  Future<void> _signIn() async {
+  bool _busy = false;
+  bool _isRegisterMode = false;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signInWithGoogle() async {
     final auth = context.read<AuthRepository>();
-    setState(() => _signingIn = true);
+    setState(() => _busy = true);
     try {
       await auth.signInWithGoogle();
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
     } finally {
-      if (mounted) setState(() => _signingIn = false);
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _submitEmailForm() async {
+    if (!_formKey.currentState!.validate()) return;
+    final auth = context.read<AuthRepository>();
+    setState(() => _busy = true);
+    try {
+      if (_isRegisterMode) {
+        await auth.registerWithEmail(_email.text, _password.text);
+      } else {
+        await auth.signInWithEmail(_email.text, _password.text);
+      }
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    final email = _email.text.trim();
+    if (Validators.email(email) != null) {
+      showErrorSnackBar(
+        context,
+        const _PlainMessage('Ingresa tu correo arriba primero.'),
+      );
+      return;
+    }
+    final auth = context.read<AuthRepository>();
+    setState(() => _busy = true);
+    try {
+      await auth.sendPasswordResetEmail(email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Te enviamos un correo a $email para restablecer tu contraseña.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -40,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
+            padding: const EdgeInsets.fromLTRB(32, 32, 32, 48),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -67,13 +123,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Iniciá sesión para guardar tu rutina, tu progreso y tu '
+                  'Inicia sesión para guardar tu rutina, tu progreso y tu '
                   'peso corporal, y tenerlos sincronizados en cualquier '
                   'dispositivo.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 32),
                 if (!auth.isAvailable)
                   Card(
                     color: scheme.errorContainer,
@@ -86,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             'La sincronización no está configurada en esta '
                             'build (falta un google-services.json real). '
-                            'Contactá al desarrollador.',
+                            'Contacta al desarrollador.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: scheme.onErrorContainer),
                           ),
@@ -94,21 +150,101 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   )
-                else
+                else ...[
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: _signingIn ? null : _signIn,
-                      icon: _signingIn
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.login),
+                      onPressed: _busy ? null : _signInWithGoogle,
+                      icon: const Icon(Icons.login),
                       label: const Text('Iniciar sesión con Google'),
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: scheme.outlineVariant)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'o',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: scheme.outlineVariant)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _email,
+                          keyboardType: TextInputType.emailAddress,
+                          autocorrect: false,
+                          decoration: const InputDecoration(
+                            labelText: 'Correo',
+                            prefixIcon: Icon(Icons.email_outlined),
+                          ),
+                          validator: Validators.email,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _password,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Contraseña',
+                            prefixIcon: Icon(Icons.lock_outline),
+                          ),
+                          validator: Validators.password,
+                        ),
+                        if (!_isRegisterMode) ...[
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _busy ? null : _forgotPassword,
+                              child: const Text('¿Olvidaste tu contraseña?'),
+                            ),
+                          ),
+                        ] else
+                          const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _busy ? null : _submitEmailForm,
+                            icon: _busy
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.email_outlined),
+                            label: Text(
+                              _isRegisterMode
+                                  ? 'Crear cuenta'
+                                  : 'Iniciar sesión',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => setState(
+                                  () => _isRegisterMode = !_isRegisterMode,
+                                ),
+                          child: Text(
+                            _isRegisterMode
+                                ? '¿Ya tienes cuenta? Inicia sesión'
+                                : '¿No tienes cuenta? Crea una',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -116,4 +252,14 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+/// Wrapper mínimo para mostrar un mensaje de validación local (no viene de
+/// una excepción real) a través del mismo `showErrorSnackBar`.
+class _PlainMessage implements Exception {
+  const _PlainMessage(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
 }

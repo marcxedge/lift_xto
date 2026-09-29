@@ -106,6 +106,27 @@ class Validators {
     return null;
   }
 
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  static String? email(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return 'Requerido';
+    if (!_emailRegex.hasMatch(trimmed)) return 'Correo inválido';
+    return null;
+  }
+
+  /// Firebase Auth exige mínimo 6 caracteres para contraseñas por email.
+  static const passwordMinLength = 6;
+
+  static String? password(String? value) {
+    final v = value ?? '';
+    if (v.isEmpty) return 'Requerido';
+    if (v.length < passwordMinLength) {
+      return 'Mínimo $passwordMinLength caracteres';
+    }
+    return null;
+  }
+
   static String _fmt(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 }

@@ -94,7 +94,7 @@ class _AccountSheetState extends State<AccountSheet> {
                 icon: Icons.cloud_queue,
                 title: 'Sin sesión iniciada',
                 subtitle:
-                    'Iniciá sesión con Google para respaldar tus datos y '
+                    'Inicia sesión con Google para respaldar tus datos y '
                     'poder usarlos en otro dispositivo.',
               ),
               const SizedBox(height: 16),

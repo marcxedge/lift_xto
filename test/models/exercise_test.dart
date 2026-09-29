@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lift_xto/models/exercise.dart';
 import 'package:lift_xto/utils/constants.dart';
+import 'package:lift_xto/utils/muscle_groups.dart';
 
 void main() {
   group('Exercise — serialización', () {
@@ -53,6 +54,45 @@ void main() {
       };
       final ex = Exercise.fromMap(map);
       expect(ex.trackingType, TrackingType.weight);
+    });
+  });
+
+  group('Exercise — muscleGroup', () {
+    test('toMap/fromMap hacen roundtrip del grupo elegido a mano', () {
+      const ex = Exercise(
+        dayOfWeek: 1,
+        name: 'Press de banca',
+        sets: 4,
+        muscleGroup: MuscleGroup.pecho,
+      );
+      final rebuilt = Exercise.fromMap(ex.toMap());
+      expect(rebuilt.muscleGroup, MuscleGroup.pecho);
+    });
+
+    test('fromMap con muscle_group desconocido lo ignora en vez de crashear', () {
+      final ex = Exercise.fromMap({
+        'day_of_week': 1,
+        'name': 'Ejercicio raro',
+        'sets': 3,
+        'muscle_group': 'no_existe',
+      });
+      expect(ex.muscleGroup, isNull);
+    });
+
+    test('muscleAssignment usa el grupo elegido a mano si está presente', () {
+      const ex = Exercise(
+        dayOfWeek: 1,
+        name: 'Ejercicio inventado sin match de nombre',
+        sets: 3,
+        muscleGroup: MuscleGroup.dorsal,
+      );
+      expect(ex.muscleAssignment.primary, [MuscleGroup.dorsal]);
+      expect(ex.muscleAssignment.secondary, isEmpty);
+    });
+
+    test('muscleAssignment cae a detección por nombre si no hay grupo elegido', () {
+      const ex = Exercise(dayOfWeek: 1, name: 'Press banca', sets: 4);
+      expect(ex.muscleAssignment.primary, contains(MuscleGroup.pecho));
     });
   });
 
