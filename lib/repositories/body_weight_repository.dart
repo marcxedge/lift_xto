@@ -9,10 +9,20 @@ import '../sync/sync_service.dart';
 /// razonamiento del patrón (envuelve [DatabaseHelper], notifica en cada
 /// escritura).
 class BodyWeightRepository extends ChangeNotifier {
-  BodyWeightRepository(this._db, [this._sync]);
+  BodyWeightRepository(this._db, [this._sync]) {
+    // Ver ExerciseRepository: reenvía el aviso de un `pull` remoto como
+    // notificación propia, para que la UI se refresque sola.
+    _sync?.addListener(notifyListeners);
+  }
 
   final DatabaseHelper _db;
   final SyncService? _sync;
+
+  @override
+  void dispose() {
+    _sync?.removeListener(notifyListeners);
+    super.dispose();
+  }
 
   Future<List<BodyWeightLog>> getAll() async {
     try {

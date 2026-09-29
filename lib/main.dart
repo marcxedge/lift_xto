@@ -12,6 +12,7 @@ import 'repositories/exercise_log_repository.dart';
 import 'repositories/exercise_repository.dart';
 import 'repositories/profile_repository.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 import 'sync/auth_repository.dart';
 import 'sync/sync_service.dart';
 import 'utils/theme.dart';
@@ -31,11 +32,13 @@ Future<void> main() async {
   final db = DatabaseHelper.instance;
   await db.database;
 
-  // La sincronización con Firebase es opcional: si `google-services.json`
-  // no está configurado con un proyecto real (por ejemplo, en un clon
-  // fresco del repo con el placeholder de ejemplo), Firebase.initializeApp
-  // falla acá y la app sigue funcionando 100% local — sólo se deshabilita
-  // el botón de cuenta/sincronización. Ver README → Sincronización.
+  // El login con Google es obligatorio (ver LoginScreen/AuthGate), así que
+  // Firebase ya no es "opcional" en el sentido de que la app funcione sin
+  // él — pero igual envolvemos la inicialización en try/catch: si
+  // `google-services.json` es el placeholder de ejemplo (clon fresco del
+  // repo sin configurar), la app no crashea, sino que LoginScreen muestra
+  // un mensaje claro en vez de un botón de login roto. Ver README →
+  // Sincronización.
   var firebaseAvailable = true;
   try {
     await Firebase.initializeApp();
@@ -110,10 +113,25 @@ class LiftXtoApp extends StatelessWidget {
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: mode,
-            home: const HomeScreen(),
+            home: const AuthGate(),
           );
         },
       ),
     );
+  }
+}
+
+/// Puerta de acceso: el login con Google es obligatorio, así que acá se
+/// decide entre [LoginScreen] y [HomeScreen] según
+/// `AuthRepository.isSignedIn`. Al escuchar (`watch`) el repositorio, tanto
+/// un login exitoso como un "Cerrar sesión" hacen que este widget cambie de
+/// pantalla solo, sin navegación explícita en ningún otro lado.
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthRepository>();
+    return auth.isSignedIn ? const HomeScreen() : const LoginScreen();
   }
 }

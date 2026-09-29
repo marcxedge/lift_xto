@@ -18,7 +18,7 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 - ✅ Arquitectura en capas (Repository + Observer) con inyección de dependencias vía `provider`
 - ✅ Validación de rangos centralizada y feedback visible de errores
 - ✅ Backups de Android deshabilitados y build de release minificado/ofuscado
-- ✅ Sincronización opcional offline-first con Firebase (Google Sign-In + Firestore), patrón outbox
+- ✅ Login obligatorio con Google + sincronización offline-first con Firebase (Firestore), patrón outbox
 
 ## Capturas de pantalla
 
@@ -36,9 +36,10 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 
 ## Arquitectura
 
-La app sigue una arquitectura en capas simple, pensada para una app local-first
-(sin backend) pero con los mismos problemas de cualquier app con estado
-compartido entre pantallas:
+La app sigue una arquitectura en capas simple, local-first: SQLite es la
+única fuente de verdad para la UI (Firestore es un respaldo/sincronización
+en segundo plano, nunca se lee directo desde una pantalla), con los mismos
+problemas de cualquier app con estado compartido entre pantallas:
 
 ```
 UI (screens/widgets)
@@ -84,7 +85,7 @@ SQLite (sqflite)
  
 ```
 lib/
-├── main.dart                       # Entry point + MultiProvider + tema
+├── main.dart                       # Entry point + MultiProvider + AuthGate + tema
 ├── core/
 │   └── app_exception.dart          # Excepción de dominio con mensaje user-friendly
 ├── database/
@@ -104,6 +105,7 @@ lib/
 │   ├── body_weight_log.dart
 │   └── user_profile.dart
 ├── screens/
+│   ├── login_screen.dart           # Puerta de acceso obligatoria (Google Sign-In)
 │   ├── home_screen.dart            # Bottom navigation
 │   ├── routine_screen.dart         # Vista de los 7 días
 │   ├── day_exercises_screen.dart   # Ejercicios de un día
@@ -170,12 +172,15 @@ user_profile (id, height_cm, age, gender)
  
 Las foreign keys están activas (`PRAGMA foreign_keys = ON`), así que eliminar un ejercicio borra en cascada todo su historial. El archivo de la BD se llama `lift_xto.db`.
 
-## Sincronización (Firebase, opcional)
+## Sincronización (Firebase)
 
-SQLite sigue siendo la **única fuente de verdad**: la app funciona 100%
-igual sin conexión, y toda lectura de la UI pasa siempre por los
-repositorios locales. La sincronización con Firestore es un agregado
-opcional detrás de Google Sign-In, con patrón **outbox**:
+El login con Google es **obligatorio**: `AuthGate` (`lib/main.dart`) muestra
+`LoginScreen` hasta que hay sesión, y recién ahí deja pasar a `HomeScreen`
+— ver `lib/screens/login_screen.dart`. Una vez logueado, todo funciona
+offline con normalidad (sólo el login inicial necesita conexión); SQLite
+sigue siendo la **única fuente de verdad** para la UI, y toda lectura de
+pantalla pasa siempre por los repositorios locales. La sincronización con
+Firestore corre en segundo plano con patrón **outbox**:
 
 ```
 Escritura local (repo.add/update/delete)
@@ -203,14 +208,22 @@ SyncService.requestSync()  (fire-and-forget, no bloquea la UI)
   `test/sync/sync_service_test.dart`) — sin merge de campos, gana el cambio
   más reciente. Suficiente para un tracker personal con baja probabilidad de
   edición simultánea real.
-- **Disparadores**: al iniciar sesión, al recuperar conexión
+- **Disparadores**: al iniciar sesión (dispara la primera sincronización
+  completa, "todo se carga desde ahí"), al recuperar conexión
   (`connectivity_plus`), después de cada escritura local, o manualmente
   desde el botón ☁️ del AppBar → "Sincronizar ahora".
+- **La UI se refresca sola con datos que llegan por `pull`**: un `pull`
+  remoto escribe directo en `DatabaseHelper` (no pasa por los
+  repositorios), así que cada repositorio se suscribe también a
+  `SyncService` (`_sync?.addListener(notifyListeners)`) y reenvía ese aviso
+  como propio — las pantallas, que ya escuchaban al repositorio, se
+  recargan solas sin código extra.
 - **Sin Firebase configurado**: `Firebase.initializeApp()` está envuelto en
   `try/catch` en `main.dart` — si falla (por ejemplo, con el
-  `google-services.json` de ejemplo), la app sigue funcionando 100% local y
-  el botón de cuenta muestra "Sincronización no configurada" en vez de
-  crashear.
+  `google-services.json` de ejemplo), la app no crashea, pero como el login
+  es obligatorio, `LoginScreen` queda mostrando "Sincronización no
+  configurada" en vez de un botón de login roto (no hay forma de entrar a
+  la app en ese estado).
 
 ### Configurar tu propio Firebase
 
@@ -223,10 +236,10 @@ SyncService.requestSync()  (fire-and-forget, no bloquea la UI)
 
 ## Seguridad
 
-La app no requiere conexión para funcionar (no pide el permiso `INTERNET`
-por sí misma — Firebase lo agrega sólo si configurás sincronización), y
-como guarda datos de salud (peso, estatura, edad) localmente, vale
-endurecerla igual:
+La app necesita conexión sólo para el login inicial con Google; a partir de
+ahí, toda lectura/escritura de la UI sigue pasando por SQLite local (no pide
+el permiso `INTERNET` por sí misma — lo agrega Firebase). Como además guarda
+datos de salud (peso, estatura, edad), vale endurecerla:
 
 - **SQL parametrizado**: todas las queries de `DatabaseHelper` usan
   `where`/`whereArgs` (o placeholders `?` en los `rawQuery`), nunca

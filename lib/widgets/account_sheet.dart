@@ -33,6 +33,10 @@ class _AccountSheetState extends State<AccountSheet> {
     setState(() => _busy = true);
     try {
       await auth.signOut();
+      // El login es obligatorio: en cuanto se cierra sesión, AuthGate (ver
+      // main.dart) va a mostrar LoginScreen solo. Cerramos este sheet para
+      // no dejarlo flotando sobre la nueva pantalla.
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
     } finally {

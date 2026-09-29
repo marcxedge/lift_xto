@@ -10,13 +10,25 @@ import '../sync/sync_service.dart';
 /// que cualquier pantalla que dependa de la lista de ejercicios se entere
 /// sin necesidad de recargar la app (patrón Observer).
 class ExerciseRepository extends ChangeNotifier {
-  ExerciseRepository(this._db, [this._sync]);
+  ExerciseRepository(this._db, [this._sync]) {
+    // Un `pull` de SyncService escribe directo en DatabaseHelper (no pasa
+    // por este repositorio), así que sin esto una sincronización que trae
+    // datos nuevos de otro dispositivo no se reflejaría en la UI hasta la
+    // próxima acción manual. Reenviamos su notificación como propia.
+    _sync?.addListener(notifyListeners);
+  }
 
   final DatabaseHelper _db;
   // Opcional: si está presente, cada escritura local le avisa "hay algo
   // pendiente" (fire-and-forget). El repositorio sigue sin saber nada de
   // Firestore — sólo empuja el aviso.
   final SyncService? _sync;
+
+  @override
+  void dispose() {
+    _sync?.removeListener(notifyListeners);
+    super.dispose();
+  }
 
   Future<List<Exercise>> getByDay(int dayOfWeek) async {
     try {

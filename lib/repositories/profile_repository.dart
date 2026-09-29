@@ -8,10 +8,20 @@ import '../sync/sync_service.dart';
 /// Repositorio del perfil de usuario (único, id fijo = 1). Ver
 /// [ExerciseRepository] para el razonamiento del patrón.
 class ProfileRepository extends ChangeNotifier {
-  ProfileRepository(this._db, [this._sync]);
+  ProfileRepository(this._db, [this._sync]) {
+    // Ver ExerciseRepository: reenvía el aviso de un `pull` remoto como
+    // notificación propia, para que la UI se refresque sola.
+    _sync?.addListener(notifyListeners);
+  }
 
   final DatabaseHelper _db;
   final SyncService? _sync;
+
+  @override
+  void dispose() {
+    _sync?.removeListener(notifyListeners);
+    super.dispose();
+  }
 
   Future<UserProfile> get() async {
     try {
