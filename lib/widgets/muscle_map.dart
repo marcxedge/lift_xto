@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../utils/muscle_groups.dart';
@@ -126,6 +128,49 @@ class _MuscleMapPainter extends CustomPainter {
 
   // ─────────────────────────── Outline base ───────────────────────────
 
+  /// Construye un polígono cerrado con las esquinas redondeadas a partir de
+  /// una lista de vértices. Sin esto, el torso/brazos/piernas quedaban como
+  /// polígonos de líneas rectas — funcional, pero se leía como un maniquí
+  /// robótico en vez de una silueta humana. "Muerde" `radius` unidades de
+  /// cada arista antes del vértice y lo reemplaza por una curva cuadrática,
+  /// sin tocar las coordenadas originales (que las formas musculares ya
+  /// usan como referencia para alinearse encima).
+  /// `radius` es un valor único para todos los vértices, o una lista con un
+  /// radio por vértice (para, por ejemplo, redondear mucho la curva del
+  /// hombro y poco la de la cintura dentro del mismo polígono).
+  Path _roundedPolygon(List<Offset> pts, Object radius) {
+    final path = Path();
+    final n = pts.length;
+    final radii = radius is List<double>
+        ? radius
+        : List<double>.filled(n, (radius as num).toDouble());
+    Offset toward(Offset from, Offset to, double dist) {
+      final dx = to.dx - from.dx;
+      final dy = to.dy - from.dy;
+      final len = math.sqrt(dx * dx + dy * dy);
+      if (len == 0) return from;
+      final t = (dist / len).clamp(0.0, 0.5);
+      return Offset(from.dx + dx * t, from.dy + dy * t);
+    }
+
+    for (var i = 0; i < n; i++) {
+      final prev = pts[(i - 1 + n) % n];
+      final curr = pts[i];
+      final next = pts[(i + 1) % n];
+      final r = radii[i];
+      final start = toward(curr, prev, r);
+      final end = toward(curr, next, r);
+      if (i == 0) {
+        path.moveTo(start.dx, start.dy);
+      } else {
+        path.lineTo(start.dx, start.dy);
+      }
+      path.quadraticBezierTo(curr.dx, curr.dy, end.dx, end.dy);
+    }
+    path.close();
+    return path;
+  }
+
   void _drawBodyOutline(
       Canvas canvas,
       Paint fill,
@@ -134,80 +179,80 @@ class _MuscleMapPainter extends CustomPainter {
         required double cx,
       }) {
     // Cabeza
-    final headRect = Rect.fromCenter(center: Offset(cx, 30), width: 38, height: 44);
+    final headRect = Rect.fromCenter(center: Offset(cx, 29), width: 36, height: 44);
     canvas.drawOval(headRect, fill);
     canvas.drawOval(headRect, stroke);
 
-    // Cuello
-    final neck = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(cx, 58), width: 18, height: 14),
-      const Radius.circular(4),
-    );
-    canvas.drawRRect(neck, fill);
-    canvas.drawRRect(neck, stroke);
-
-    // Torso
-    final torso = Path()
-      ..moveTo(cx - 50, 75)
-      ..lineTo(cx + 50, 75)
-      ..lineTo(cx + 56, 110)
-      ..lineTo(cx + 50, 195)
-      ..lineTo(cx + 28, 220)
-      ..lineTo(cx - 28, 220)
-      ..lineTo(cx - 50, 195)
-      ..lineTo(cx - 56, 110)
-      ..close();
+    // Cuello + torso como UN SOLO contorno (antes eran dos formas
+    // separadas que compartían el mismo borde en la unión — ambos trazos
+    // coincidiendo ahí se veían como una costura marcada). El borde
+    // superior baja en pendiente desde el cuello hasta la punta de cada
+    // hombro, como el trapecio real, en vez de una línea recta.
+    final torso = _roundedPolygon([
+      Offset(cx - 9, 44),
+      Offset(cx - 20, 78),
+      Offset(cx - 50, 87),
+      Offset(cx - 56, 110),
+      Offset(cx - 50, 195),
+      Offset(cx - 28, 220),
+      Offset(cx + 28, 220),
+      Offset(cx + 50, 195),
+      Offset(cx + 56, 110),
+      Offset(cx + 50, 87),
+      Offset(cx + 20, 78),
+      Offset(cx + 9, 44),
+    ], <double>[5, 8, 20, 12, 12, 12, 12, 12, 12, 20, 8, 5]);
     canvas.drawPath(torso, fill);
     canvas.drawPath(torso, stroke);
 
     // Brazo izquierdo (desde la perspectiva del observador, izq de la figura)
-    final armL = Path()
-      ..moveTo(cx - 50, 80)
-      ..lineTo(cx - 78, 95)
-      ..lineTo(cx - 80, 175)
-      ..lineTo(cx - 70, 245)
-      ..lineTo(cx - 56, 245)
-      ..lineTo(cx - 64, 175)
-      ..lineTo(cx - 56, 110)
-      ..close();
+    final armL = _roundedPolygon([
+      Offset(cx - 50, 80),
+      Offset(cx - 78, 95),
+      Offset(cx - 80, 175),
+      Offset(cx - 70, 245),
+      Offset(cx - 56, 245),
+      Offset(cx - 64, 175),
+      Offset(cx - 56, 110),
+    ], 9);
     canvas.drawPath(armL, fill);
     canvas.drawPath(armL, stroke);
 
     // Brazo derecho (espejado)
-    final armR = Path()
-      ..moveTo(cx + 50, 80)
-      ..lineTo(cx + 78, 95)
-      ..lineTo(cx + 80, 175)
-      ..lineTo(cx + 70, 245)
-      ..lineTo(cx + 56, 245)
-      ..lineTo(cx + 64, 175)
-      ..lineTo(cx + 56, 110)
-      ..close();
+    final armR = _roundedPolygon([
+      Offset(cx + 50, 80),
+      Offset(cx + 78, 95),
+      Offset(cx + 80, 175),
+      Offset(cx + 70, 245),
+      Offset(cx + 56, 245),
+      Offset(cx + 64, 175),
+      Offset(cx + 56, 110),
+    ], 9);
     canvas.drawPath(armR, fill);
     canvas.drawPath(armR, stroke);
 
     // Piernas
-    final legL = Path()
-      ..moveTo(cx - 28, 220)
-      ..lineTo(cx - 32, 280)
-      ..lineTo(cx - 30, 360)
-      ..lineTo(cx - 18, 388)
-      ..lineTo(cx - 4, 388)
-      ..lineTo(cx - 6, 280)
-      ..lineTo(cx - 4, 220)
-      ..close();
+    final legL = _roundedPolygon([
+      Offset(cx - 28, 220),
+      Offset(cx - 32, 280),
+      Offset(cx - 30, 360),
+      Offset(cx - 18, 388),
+      Offset(cx - 4, 388),
+      Offset(cx - 6, 280),
+      Offset(cx - 4, 220),
+    ], 11);
     canvas.drawPath(legL, fill);
     canvas.drawPath(legL, stroke);
 
-    final legR = Path()
-      ..moveTo(cx + 28, 220)
-      ..lineTo(cx + 32, 280)
-      ..lineTo(cx + 30, 360)
-      ..lineTo(cx + 18, 388)
-      ..lineTo(cx + 4, 388)
-      ..lineTo(cx + 6, 280)
-      ..lineTo(cx + 4, 220)
-      ..close();
+    final legR = _roundedPolygon([
+      Offset(cx + 28, 220),
+      Offset(cx + 32, 280),
+      Offset(cx + 30, 360),
+      Offset(cx + 18, 388),
+      Offset(cx + 4, 388),
+      Offset(cx + 6, 280),
+      Offset(cx + 4, 220),
+    ], 11);
     canvas.drawPath(legR, fill);
     canvas.drawPath(legR, stroke);
   }
