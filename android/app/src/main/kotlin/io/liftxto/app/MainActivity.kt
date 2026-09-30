@@ -1,4 +1,4 @@
-package com.example.lift_xto
+package io.liftxto.app
 
 import io.flutter.embedding.android.FlutterActivity
 

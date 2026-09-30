@@ -233,7 +233,7 @@ SyncService.requestSync()  (fire-and-forget, no bloquea la UI)
 ### Configurar tu propio Firebase
 
 1. Crear un proyecto en [Firebase Console](https://console.firebase.google.com).
-2. Agregar una app Android con `applicationId` = `com.example.lift_xto`.
+2. Agregar una app Android con `applicationId` = `io.liftxto.app` (o el que hayas elegido — tiene que coincidir exacto con `android/app/build.gradle.kts`).
 3. Sacar el SHA-1 de tu keystore de debug (`cd android && ./gradlew signingReport`) y cargarlo en la app Android de Firebase — si no, Google Sign-In falla con `DEVELOPER_ERROR`.
 4. Habilitar **Authentication → Sign-in method → Google** y, si querés ofrecer también login por email/contraseña, **Email/Password**.
 5. Habilitar **Firestore Database** y pegar las reglas de [`firestore.rules`](firestore.rules) en la consola.
