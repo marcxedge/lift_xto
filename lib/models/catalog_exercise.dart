@@ -9,6 +9,7 @@ class CatalogExercise {
   const CatalogExercise({
     required this.id,
     required this.name,
+    required this.nameEs,
     required this.bodyPart,
     required this.bodyPartEs,
     required this.equipment,
@@ -25,6 +26,13 @@ class CatalogExercise {
 
   final String id;
   final String name;
+
+  /// Traducción/normalización automática del nombre a español (ver
+  /// `scripts/build_exercise_catalog.py` → `translate_name`). No es una
+  /// traducción profesional — es un diccionario de vocabulario de
+  /// gimnasio aplicado palabra por palabra — pero cubre la gran mayoría
+  /// del catálogo de forma clara y reconocible.
+  final String nameEs;
   final String bodyPart;
   final String bodyPartEs;
   final String equipment;
@@ -42,6 +50,7 @@ class CatalogExercise {
     return CatalogExercise(
       id: json['id'] as String,
       name: json['name'] as String,
+      nameEs: json['nameEs'] as String? ?? json['name'] as String,
       bodyPart: json['bodyPart'] as String,
       bodyPartEs: json['bodyPartEs'] as String,
       equipment: json['equipment'] as String,

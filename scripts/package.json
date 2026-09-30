@@ -3,6 +3,6 @@
   "private": true,
   "description": "Scripts de mantenimiento que no son parte de la app Flutter (no se publican).",
   "dependencies": {
-    "firebase-admin": "^12.6.0"
+    "firebase-admin": "^12.7.0"
   }
 }

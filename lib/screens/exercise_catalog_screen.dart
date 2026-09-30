@@ -78,7 +78,7 @@ class _ExerciseCatalogScreenState extends State<ExerciseCatalogScreen> {
               onChanged: _onQueryChanged,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Buscar ejercicio (en inglés)...',
+                hintText: 'Buscar ejercicio...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isEmpty
                     ? null
@@ -201,10 +201,20 @@ class _CatalogExerciseTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      exercise.name,
+                      exercise.nameEs,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      exercise.name,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -245,7 +255,7 @@ class _CatalogExercisePreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(exercise.name)),
+      appBar: AppBar(title: Text(exercise.nameEs)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [
@@ -259,7 +269,16 @@ class _CatalogExercisePreview extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          Text(
+            exercise.name,
+            style: TextStyle(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,

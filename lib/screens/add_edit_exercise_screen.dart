@@ -83,7 +83,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
     );
     if (chosen == null) return;
     setState(() {
-      _name.text = chosen.name;
+      _name.text = chosen.nameEs;
       if (chosen.muscleGroup != null) _muscleGroup = chosen.muscleGroup;
     });
   }

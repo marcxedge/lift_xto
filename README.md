@@ -255,6 +255,16 @@ El catálogo viene del dataset
 [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset)
 (~1300 ejercicios, licencia MIT para el texto).
 
+El dataset sólo trae el nombre en inglés (las instrucciones sí vienen en
+español) — `build_exercise_catalog.py` genera además `nameEs`, una
+traducción automática por diccionario de vocabulario de gimnasio (equipo,
+movimiento, posición, músculo; ver `PHRASES_ES`/`WORDS_ES` en ese script).
+No es una traducción profesional — palabras fuera del diccionario quedan
+en inglés en vez de perderse — pero cubre bien la mayoría del catálogo.
+`nameEs` es el nombre que se muestra como principal (el original en inglés
+queda como referencia más chico debajo) y la búsqueda matchea por palabra
+suelta contra ambos, en cualquier orden.
+
 Está dividido en dos partes con licencias distintas:
 
 - **Texto (nombre, categoría, equipo, instrucciones en español, músculo)**:

@@ -24,19 +24,29 @@ class ExerciseCatalogRepository {
     return list;
   }
 
-  /// Busca por nombre (case-insensitive, substring) y opcionalmente filtra
-  /// por grupo muscular. `query` vacío devuelve todo (filtrado sólo por
-  /// [muscleGroup] si se pasó).
+  /// Busca por nombre (en inglés o en la traducción automática a español,
+  /// ver [CatalogExercise.nameEs]) y opcionalmente filtra por grupo
+  /// muscular. La búsqueda es por palabras: cada palabra de `query` tiene
+  /// que aparecer en algún lado del nombre (en cualquier orden), no exige
+  /// la frase completa — así "press banca" encuentra "barra press de
+  /// banca" aunque el orden no coincida exacto. `query` vacío devuelve
+  /// todo (filtrado sólo por [muscleGroup] si se pasó).
   Future<List<CatalogExercise>> search({
     String query = '',
     MuscleGroup? muscleGroup,
   }) async {
     final all = await _all();
-    final q = query.trim().toLowerCase();
+    final words = query
+        .trim()
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
     return all.where((e) {
       if (muscleGroup != null && e.muscleGroup != muscleGroup) return false;
-      if (q.isEmpty) return true;
-      return e.name.toLowerCase().contains(q);
+      if (words.isEmpty) return true;
+      final haystack = '${e.name} ${e.nameEs}'.toLowerCase();
+      return words.every(haystack.contains);
     }).toList();
   }
 
