@@ -6,17 +6,17 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
  
 - ✅ Rutina semanal vacía por defecto (Lunes a Sábado) — cada usuario arma la suya desde cero
 - ✅ Editar / eliminar / agregar ejercicios en cualquier día (incluido Miércoles)
-- ✅ Categorización muscular manual: al crear un ejercicio elegís su grupo muscular (18 grupos específicos) desde un combo, en vez de depender de detectarlo por el nombre
+- ✅ Categorización muscular manual: al crear un ejercicio eliges su grupo muscular (18 grupos específicos) desde un combo, en vez de depender de detectarlo por el nombre
 - ✅ Mapa muscular visual que refleja el volumen trabajado por grupo, usando esa categorización
 - ✅ Registro de peso (kg) × sets × reps por sesión
 - ✅ Registro de duración (segundos) para planchas y cardio
 - ✅ Gráfico de evolución por ejercicio con `fl_chart`
 - ✅ Récord personal (PR) y resumen de sesiones
 - ✅ Pantalla de Cuerpo unificada: peso actual, IMC, escala visual y rango saludable juntos en una sola vista (antes eran 2 tabs separadas)
-- ✅ Sugerencia de completar el perfil (estatura, peso) al entrar si todavía falta
+- ✅ Configuración de perfil (nombre, apellido, estatura y fecha de nacimiento) obligatoria la primera vez que se inicia sesión, antes de dejar entrar al resto de la app — la edad se calcula sola a partir de la fecha
 - ✅ Almacenamiento 100% local con SQLite
 - ✅ Material 3 con paleta **azul marino** (seed `#1E3A8A`)
-- ✅ Modo **oscuro por defecto**, con toggle claro / oscuro / sistema persistente vía `SharedPreferences`
+- ✅ Modo **claro por defecto**, con toggle claro / oscuro / sistema (desde el menú ⋮) persistente vía `SharedPreferences`
 - ✅ Arquitectura en capas (Repository + Observer) con inyección de dependencias vía `provider`
 - ✅ Validación de rangos centralizada y feedback visible de errores
 - ✅ Backups de Android deshabilitados y build de release minificado/ofuscado
@@ -72,12 +72,12 @@ SQLite (sqflite)
 - **Inyección de dependencias** vía [`provider`](https://pub.dev/packages/provider):
   los 4 repositorios se crean una sola vez en `main.dart` dentro de un
   `MultiProvider` y bajan por el árbol de widgets con `context.read<T>()`.
-  Facilita testear cada capa por separado (podés inyectar un repositorio
+  Facilita testear cada capa por separado (se puede inyectar un repositorio
   fake sin tocar SQLite).
 - **Validación centralizada** (`lib/utils/validators.dart`): rangos con
-  sentido físico (peso, estatura, edad, sets, reps, duración) reutilizados
-  por todos los formularios — antes cada uno tenía su propia validación
-  ad-hoc e inconsistente.
+  sentido físico (peso, estatura, sets, reps, duración) reutilizados por
+  todos los formularios — antes cada uno tenía su propia validación ad-hoc
+  e inconsistente.
 - **Manejo de errores**: los repositorios atrapan excepciones de la
   plataforma (SQLite, IO) y las relanzan como `AppException`
   (`lib/core/app_exception.dart`) con un mensaje apto para mostrar directo al
@@ -108,6 +108,7 @@ lib/
 │   └── user_profile.dart
 ├── screens/
 │   ├── login_screen.dart           # Puerta de acceso obligatoria (Google o email/contraseña)
+│   ├── profile_setup_screen.dart   # Configuración de perfil obligatoria (primer inicio)
 │   ├── home_screen.dart            # Bottom navigation
 │   ├── routine_screen.dart         # Vista de los 7 días
 │   ├── day_exercises_screen.dart   # Ejercicios de un día
@@ -120,10 +121,10 @@ lib/
 │   ├── log_entry_sheet.dart        # Bottom sheet para registrar peso
 │   ├── body_weight_sheet.dart      # Bottom sheet para peso corporal
 │   ├── profile_sheet.dart          # Bottom sheet del perfil
-│   ├── account_sheet.dart          # Bottom sheet de cuenta/sincronización
-│   ├── sync_status_button.dart     # Ícono ☁️ de estado de sync en el AppBar
-│   ├── state_views.dart            # LoadingView + EmptyStateView reutilizables
-│   └── theme_toggle_button.dart    # Botón AppBar para alternar tema
+│   ├── sync_status_button.dart     # Ícono ☁️ de estado de sync en el AppBar (toca = sincronizar/confirmar)
+│   ├── app_menu_button.dart        # Menú ⋮: cambiar tema + cerrar sesión
+│   ├── google_logo.dart            # Ícono "G" para el botón de Google Sign-In
+│   └── state_views.dart            # LoadingView + EmptyStateView reutilizables
 └── utils/
     ├── constants.dart              # Días de la semana, tracking types
     ├── validators.dart             # Validadores centralizados con rangos
@@ -169,7 +170,7 @@ exercise_logs (id, exercise_id, date, weight_kg, sets_completed,
  
 body_weight_logs (id, date, weight_kg, notes)
  
-user_profile (id, height_cm, age, gender)
+user_profile (id, first_name, last_name, height_cm, birth_date, gender)
 ```
  
 Las foreign keys están activas (`PRAGMA foreign_keys = ON`), así que eliminar un ejercicio borra en cascada todo su historial. El archivo de la BD se llama `lift_xto.db`.
@@ -268,9 +269,9 @@ datos de salud (peso, estatura, edad), vale endurecerla:
   ingeniería inversa del bytecode Kotlin/Java.
 - **Firma de release**: por ahora sigue usando la keystore de debug como
   placeholder (`flutter run --release` funciona out-of-the-box). Para
-  publicar de verdad, generá tu propia keystore y configurá
+  publicar de verdad, genera tu propia keystore y configura
   `signingConfigs.release` en `android/app/build.gradle.kts` — es una acción
-  que sólo vos podés hacer con tu propio material secreto.
+  que solo tú puedes hacer con tu propio material secreto.
 
 ## Cómo funciona la sobrecarga progresiva
  
@@ -281,7 +282,7 @@ datos de salud (peso, estatura, edad), vale endurecerla:
 5. La gráfica muestra la evolución y el card de **PR** marca tu récord absoluto.
 ## Cómo funciona el IMC
  
-1. Pestaña **Cuerpo → Editar** → ingresa tu estatura y edad.
+1. Pestaña **Cuerpo → Editar** → ingresa tu estatura (la fecha de nacimiento se pide en el primer inicio de sesión, ver más abajo).
 2. Registra tu peso desde el mismo botón "Registrar".
 3. La pantalla calcula, todo junto:
    - Tu IMC actual
@@ -289,14 +290,15 @@ datos de salud (peso, estatura, edad), vale endurecerla:
    - Rango de peso saludable para tu estatura (BMI 18.5–24.9)
 ## Tema claro / oscuro
  
-La app arranca en **modo oscuro por defecto**. El icono en la AppBar
-(esquina superior derecha en cualquier tab) cicla entre tres estados:
+La app arranca en **modo claro por defecto**. El menú ⋮ del AppBar
+(esquina superior derecha en cualquier tab) incluye "Cambiar tema", que
+cicla entre tres estados cada vez que se toca:
  
-| Icono | Modo | Comportamiento |
-|---|---|---|
-| 🌗 `brightness_auto` | Sistema | Sigue al ajuste del SO |
-| ☀️ `light_mode` | Claro | Forzado |
-| 🌙 `dark_mode` | Oscuro | Forzado |
+| Modo | Comportamiento |
+|---|---|
+| Sistema | Sigue al ajuste del SO |
+| Claro | Forzado |
+| Oscuro | Forzado |
  
 La preferencia se persiste en `SharedPreferences` (key `theme_mode`) y se aplica antes del primer frame para evitar parpadeos al iniciar.
  

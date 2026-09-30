@@ -15,6 +15,8 @@ class Validators {
   static const bodyWeightMax = 300.0;
   static const heightMin = 50.0;
   static const heightMax = 250.0;
+  /// Límites razonables para la fecha de nacimiento (ver `_datePicker` en
+  /// `ProfileSetupScreen`/`ProfileSheet`): entre 1 y 120 años de edad.
   static const ageMin = 1;
   static const ageMax = 120;
   static const setsMin = 1;
@@ -54,17 +56,6 @@ class Validators {
     if (n == null) return 'Número inválido';
     if (n < heightMin || n > heightMax) {
       return 'Debe estar entre ${_fmt(heightMin)} y ${_fmt(heightMax)} cm';
-    }
-    return null;
-  }
-
-  static String? age(String? value, {bool required = false}) {
-    final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return required ? 'Requerido' : null;
-    final n = int.tryParse(trimmed);
-    if (n == null) return 'Número inválido';
-    if (n < ageMin || n > ageMax) {
-      return 'Debe estar entre $ageMin y $ageMax años';
     }
     return null;
   }

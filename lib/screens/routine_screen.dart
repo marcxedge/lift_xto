@@ -7,9 +7,9 @@ import '../repositories/exercise_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
+import '../widgets/app_menu_button.dart';
 import '../widgets/profile_sheet.dart';
 import '../widgets/sync_status_button.dart';
-import '../widgets/theme_toggle_button.dart';
 import 'day_exercises_screen.dart';
 
 class RoutineScreen extends StatefulWidget {
@@ -105,7 +105,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
             );
           },
         ),
-        actions: const [SyncStatusButton(), ThemeToggleButton()],
+        actions: const [SyncStatusButton(), AppMenuButton()],
       ),
       body: FutureBuilder<Map<int, List<Exercise>>>(
         future: _future,
@@ -124,23 +124,6 @@ class _RoutineScreenState extends State<RoutineScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                FutureBuilder<UserProfile>(
-                  future: _profileFuture,
-                  builder: (context, profileSnap) {
-                    final profile = profileSnap.data;
-                    // Sólo se sugiere completar el perfil si ya sabemos que
-                    // falta (no mientras carga) — evita un parpadeo.
-                    if (profile == null || profile.heightCm != null) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _ProfileNudgeCard(
-                        onTap: () => _openProfile(profile),
-                      ),
-                    );
-                  },
-                ),
                 for (var day = 1; day <= 7; day++)
                   _DayCard(
                     day: day,
@@ -160,62 +143,6 @@ class _RoutineScreenState extends State<RoutineScreen> {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// Aviso para completar el perfil (estatura, peso, edad) cuando todavía
-/// falta — se muestra al entrar a la app hasta que el usuario lo complete,
-/// porque el IMC y el seguimiento corporal dependen de esos datos.
-class _ProfileNudgeCard extends StatelessWidget {
-  const _ProfileNudgeCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.tertiaryContainer,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline, color: scheme.onTertiaryContainer),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Completa tu perfil',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: scheme.onTertiaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Agrega tu estatura y tu peso para calcular tu IMC y '
-                      'llevar un mejor seguimiento.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: scheme.onTertiaryContainer,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.chevron_right, color: scheme.onTertiaryContainer),
-            ],
-          ),
-        ),
       ),
     );
   }

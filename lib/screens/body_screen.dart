@@ -8,11 +8,11 @@ import '../models/user_profile.dart';
 import '../repositories/body_weight_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../utils/feedback.dart';
+import '../widgets/app_menu_button.dart';
 import '../widgets/body_weight_sheet.dart';
 import '../widgets/profile_sheet.dart';
 import '../widgets/state_views.dart';
 import '../widgets/sync_status_button.dart';
-import '../widgets/theme_toggle_button.dart';
 
 /// Pantalla de Cuerpo: peso corporal e IMC fusionados en una sola vista
 /// (antes eran 2 tabs separadas) — el peso actual y el IMC se ven juntos
@@ -100,7 +100,7 @@ class _BodyScreenState extends State<BodyScreen> {
         titleTextStyle: Theme.of(
           context,
         ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-        actions: const [SyncStatusButton(), ThemeToggleButton()],
+        actions: const [SyncStatusButton(), AppMenuButton()],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addWeight,

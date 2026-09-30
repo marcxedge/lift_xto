@@ -3,7 +3,7 @@ class UserProfile {
   final String? firstName;
   final String? lastName;
   final double? heightCm;
-  final int? age;
+  final DateTime? birthDate;
   final String? gender; // 'M' | 'F' | null
 
   const UserProfile({
@@ -11,9 +11,22 @@ class UserProfile {
     this.firstName,
     this.lastName,
     this.heightCm,
-    this.age,
+    this.birthDate,
     this.gender,
   });
+
+  /// Edad calculada a partir de [birthDate] — ya no se ingresa a mano, para
+  /// que no se desactualice con el tiempo. `null` si no hay fecha cargada.
+  int? get age {
+    final b = birthDate;
+    if (b == null) return null;
+    final now = DateTime.now();
+    var years = now.year - b.year;
+    if (now.month < b.month || (now.month == b.month && now.day < b.day)) {
+      years--;
+    }
+    return years;
+  }
 
   /// Nombre completo, o cadena vacía si no hay nada cargado.
   String get displayName {
@@ -43,7 +56,7 @@ class UserProfile {
     String? firstName,
     String? lastName,
     double? heightCm,
-    int? age,
+    DateTime? birthDate,
     String? gender,
   }) {
     return UserProfile(
@@ -51,7 +64,7 @@ class UserProfile {
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       heightCm: heightCm ?? this.heightCm,
-      age: age ?? this.age,
+      birthDate: birthDate ?? this.birthDate,
       gender: gender ?? this.gender,
     );
   }
@@ -62,7 +75,11 @@ class UserProfile {
       'first_name': firstName,
       'last_name': lastName,
       'height_cm': heightCm,
-      'age': age,
+      'birth_date': birthDate == null
+          ? null
+          : '${birthDate!.year.toString().padLeft(4, '0')}-'
+              '${birthDate!.month.toString().padLeft(2, '0')}-'
+              '${birthDate!.day.toString().padLeft(2, '0')}',
       'gender': gender,
     };
   }
@@ -73,7 +90,9 @@ class UserProfile {
       firstName: map['first_name'] as String?,
       lastName: map['last_name'] as String?,
       heightCm: (map['height_cm'] as num?)?.toDouble(),
-      age: map['age'] as int?,
+      birthDate: map['birth_date'] == null
+          ? null
+          : DateTime.tryParse(map['birth_date'] as String),
       gender: map['gender'] as String?,
     );
   }

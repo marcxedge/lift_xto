@@ -7,16 +7,19 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import 'database/database_helper.dart';
+import 'models/user_profile.dart';
 import 'repositories/body_weight_repository.dart';
 import 'repositories/exercise_log_repository.dart';
 import 'repositories/exercise_repository.dart';
 import 'repositories/profile_repository.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/profile_setup_screen.dart';
 import 'sync/auth_repository.dart';
 import 'sync/sync_service.dart';
 import 'utils/theme.dart';
 import 'utils/theme_controller.dart';
+import 'widgets/state_views.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -132,6 +135,62 @@ class AuthGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthRepository>();
-    return auth.isSignedIn ? const HomeScreen() : const LoginScreen();
+    return auth.isSignedIn ? const ProfileGate() : const LoginScreen();
+  }
+}
+
+/// Puerta de perfil: con sesión iniciada, exige completar la estatura
+/// antes de dejar pasar al resto de la app (sin eso el IMC y el
+/// seguimiento corporal no tienen sentido) — solo aplica la primera vez,
+/// ya que después el perfil queda guardado. Mismo patrón que [AuthGate]:
+/// escucha `ProfileRepository` y cambia de pantalla sola en cuanto detecta
+/// que ya hay una estatura cargada (recién guardada acá, o traída por
+/// sync desde otro dispositivo).
+class ProfileGate extends StatefulWidget {
+  const ProfileGate({super.key});
+
+  @override
+  State<ProfileGate> createState() => _ProfileGateState();
+}
+
+class _ProfileGateState extends State<ProfileGate> {
+  late final ProfileRepository _repo;
+  late Future<UserProfile> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _repo = context.read<ProfileRepository>();
+    _future = _repo.get();
+    _repo.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _repo.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (!mounted) return;
+    setState(() {
+      _future = _repo.get();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<UserProfile>(
+      future: _future,
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Scaffold(body: LoadingView());
+        }
+        final profile = snap.data!;
+        return profile.heightCm == null
+            ? ProfileSetupScreen(profile: profile)
+            : const HomeScreen();
+      },
+    );
   }
 }

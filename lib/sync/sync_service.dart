@@ -4,10 +4,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_helper.dart';
 import 'auth_repository.dart';
+
+/// Clave de SharedPreferences donde se guarda el uid de la última sesión
+/// que tocó los datos locales de este dispositivo.
+const _kLastUidPrefKey = 'sync_last_uid';
 
 /// Decide si una fila remota debe pisar a la versión local, comparando
 /// `updated_at` (ISO8601 UTC — comparable como texto). Función pura, sin
@@ -67,7 +72,29 @@ class SyncService extends ChangeNotifier {
   bool get canSync => _auth.isAvailable && _auth.isSignedIn;
 
   void _onAuthChanged() {
-    if (_auth.isSignedIn) requestSync();
+    unawaited(_handleAuthChanged());
+  }
+
+  /// Si la sesión activa pertenece a un uid distinto del que generó los
+  /// datos que hay ahora mismo en SQLite, los borra antes de sincronizar —
+  /// si no, al cerrar sesión y entrar con otra cuenta en el mismo
+  /// dispositivo se seguían viendo rutina/perfil/logs de la cuenta
+  /// anterior (SQLite es una sola base compartida, sin aislamiento por
+  /// cuenta).
+  Future<void> _handleAuthChanged() async {
+    if (_auth.isSignedIn) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final lastUid = prefs.getString(_kLastUidPrefKey);
+        if (lastUid != null && lastUid != uid) {
+          await _db.clearLocalData();
+          _lastSyncedAt = null;
+        }
+        await prefs.setString(_kLastUidPrefKey, uid);
+      }
+      requestSync();
+    }
     notifyListeners();
   }
 
@@ -97,25 +124,32 @@ class SyncService extends ChangeNotifier {
     unawaited(syncNow());
   }
 
-  /// Sincroniza ahora mismo. Pensado también para un botón manual
-  /// "Sincronizar ahora" en la UI (`AccountSheet`).
-  Future<void> syncNow() async {
+  /// Sincroniza ahora mismo. Pensado también para el botón manual del
+  /// ícono ☁️ del AppBar (`SyncStatusButton`), que muestra el resultado.
+  /// Devuelve `true` si terminó sin excepciones. Si no se puede sincronizar
+  /// ahora (sin sesión/conexión) o ya hay una sincronización en curso,
+  /// devuelve `false` sin reintentar — quien llama decide qué mensaje
+  /// mostrar según `isOnline`/`isSyncing`.
+  Future<bool> syncNow() async {
     await refreshPendingCount();
-    if (!canSync || _isSyncing) return;
+    if (!canSync || _isSyncing) return false;
     _isSyncing = true;
     notifyListeners();
+    var ok = true;
     try {
       await _push();
       await _pull();
       _lastSyncedAt = DateTime.now().toUtc();
     } catch (_) {
-      // Falla silenciosa y se reintenta en el próximo trigger — no hay
-      // ningún flujo que dependa de que esto termine en el momento.
+      // Se reintenta en el próximo trigger automático; acá solo reportamos
+      // el fallo para que quien llamó explícitamente pueda avisar.
+      ok = false;
     } finally {
       _isSyncing = false;
       await refreshPendingCount();
       notifyListeners();
     }
+    return ok;
   }
 
   @override
@@ -285,7 +319,7 @@ class SyncService extends ChangeNotifier {
         'first_name': data['firstName'],
         'last_name': data['lastName'],
         'height_cm': data['heightCm'],
-        'age': data['age'],
+        'birth_date': data['birthDate'],
         'gender': data['gender'],
         'updated_at': remoteUpdatedAt,
         'sync_status': 'synced',
@@ -438,7 +472,7 @@ class SyncService extends ChangeNotifier {
         'firstName': row['first_name'],
         'lastName': row['last_name'],
         'heightCm': row['height_cm'],
-        'age': row['age'],
+        'birthDate': row['birth_date'],
         'gender': row['gender'],
       };
 }

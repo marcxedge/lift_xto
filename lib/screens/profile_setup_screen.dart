@@ -5,19 +5,24 @@ import 'package:provider/provider.dart';
 
 import '../models/user_profile.dart';
 import '../repositories/profile_repository.dart';
+import '../sync/auth_repository.dart';
 import '../utils/feedback.dart';
 import '../utils/validators.dart';
 
-class ProfileSheet extends StatefulWidget {
-  const ProfileSheet({super.key, required this.profile});
+/// Configuración de perfil obligatoria la primera vez que se entra a la
+/// app (sin estatura cargada). La muestra [ProfileGate] en vez de
+/// [HomeScreen] hasta que se guarda; a partir de ahí, el resto de la app
+/// (IMC, seguimiento corporal) ya tiene los datos que necesita.
+class ProfileSetupScreen extends StatefulWidget {
+  const ProfileSetupScreen({super.key, required this.profile});
 
   final UserProfile profile;
 
   @override
-  State<ProfileSheet> createState() => _ProfileSheetState();
+  State<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
 }
 
-class _ProfileSheetState extends State<ProfileSheet> {
+class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   late final ProfileRepository _repo;
   late final TextEditingController _firstName;
@@ -83,12 +88,21 @@ class _ProfileSheetState extends State<ProfileSheet> {
     setState(() => _saving = true);
     try {
       await _repo.save(updated);
-      if (mounted) Navigator.of(context).pop(true);
+      // No hace falta navegar: ProfileGate escucha ProfileRepository y en
+      // cuanto ve heightCm cargado cambia solo a HomeScreen.
     } catch (e) {
       if (mounted) {
         setState(() => _saving = false);
         showErrorSnackBar(context, e);
       }
+    }
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await context.read<AuthRepository>().signOut();
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
     }
   }
 
@@ -98,40 +112,34 @@ class _ProfileSheetState extends State<ProfileSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final viewInsets = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: viewInsets),
-      child: Form(
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('Completa tu perfil'),
+      ),
+      body: Form(
         key: _formKey,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: scheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Mi perfil',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
+              Icon(Icons.badge_outlined, color: scheme.primary, size: 40),
+              const SizedBox(height: 12),
               Text(
-                'Personaliza tu experiencia',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+                'Antes de empezar',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 6),
+              Text(
+                'Necesitamos estos datos para calcular tu IMC y llevar un '
+                'seguimiento útil de tu progreso. Puedes editarlos cuando '
+                'quieras desde Cuerpo → Editar.',
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 24),
               TextFormField(
                 controller: _firstName,
                 textCapitalization: TextCapitalization.words,
@@ -164,8 +172,9 @@ class _ProfileSheetState extends State<ProfileSheet> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _height,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                 ],
@@ -209,7 +218,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
                 selected: {_gender},
                 onSelectionChanged: (s) => setState(() => _gender = s.first),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -220,8 +229,15 @@ class _ProfileSheetState extends State<ProfileSheet> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.save),
-                  label: const Text('Guardar'),
+                      : const Icon(Icons.check),
+                  label: const Text('Continuar'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton(
+                  onPressed: _saving ? null : _signOut,
+                  child: const Text('Cerrar sesión'),
                 ),
               ),
             ],

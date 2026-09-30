@@ -64,12 +64,12 @@ void main() {
   });
 
   group('UserProfile — serialización (toMap / fromMap)', () {
-    const profile = UserProfile(
+    final profile = UserProfile(
       id: 1,
       firstName: 'Mario',
       lastName: 'Pérez',
       heightCm: 175.5,
-      age: 28,
+      birthDate: DateTime(1997, 3, 5),
       gender: 'M',
     );
 
@@ -79,7 +79,7 @@ void main() {
       expect(map['first_name'], 'Mario');
       expect(map['last_name'], 'Pérez');
       expect(map['height_cm'], 175.5);
-      expect(map['age'], 28);
+      expect(map['birth_date'], '1997-03-05');
       expect(map['gender'], 'M');
     });
 
@@ -89,7 +89,7 @@ void main() {
       expect(rebuilt.firstName, profile.firstName);
       expect(rebuilt.lastName, profile.lastName);
       expect(rebuilt.heightCm, profile.heightCm);
-      expect(rebuilt.age, profile.age);
+      expect(rebuilt.birthDate, profile.birthDate);
       expect(rebuilt.gender, profile.gender);
     });
 
@@ -102,23 +102,47 @@ void main() {
   });
 
   group('UserProfile — copyWith', () {
-    const original = UserProfile(
+    final original = UserProfile(
       firstName: 'Mario',
       lastName: 'Pérez',
-      age: 28,
+      birthDate: DateTime(1997, 3, 5),
     );
 
     test('copia sin cambios es idéntica', () {
       final copy = original.copyWith();
       expect(copy.firstName, original.firstName);
       expect(copy.lastName, original.lastName);
-      expect(copy.age, original.age);
+      expect(copy.birthDate, original.birthDate);
     });
 
     test('solo modifica el campo indicado', () {
-      final updated = original.copyWith(age: 29);
-      expect(updated.age, 29);
+      final newDate = DateTime(1996, 1, 1);
+      final updated = original.copyWith(birthDate: newDate);
+      expect(updated.birthDate, newDate);
       expect(updated.firstName, original.firstName); // intacto
+    });
+  });
+
+  group('UserProfile — age (calculada desde birthDate)', () {
+    test('null cuando no hay fecha de nacimiento', () {
+      const p = UserProfile();
+      expect(p.age, isNull);
+    });
+
+    test('ya cumplió años este año', () {
+      final now = DateTime.now();
+      final birthDate = DateTime(now.year - 30, now.month, now.day)
+          .subtract(const Duration(days: 1));
+      final p = UserProfile(birthDate: birthDate);
+      expect(p.age, 30);
+    });
+
+    test('todavía no cumple años este año', () {
+      final now = DateTime.now();
+      final birthDate = DateTime(now.year - 30, now.month, now.day)
+          .add(const Duration(days: 1));
+      final p = UserProfile(birthDate: birthDate);
+      expect(p.age, 29);
     });
   });
 }

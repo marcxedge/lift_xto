@@ -64,21 +64,6 @@ void main() {
     });
   });
 
-  group('Validators.age', () {
-    test('rechaza 0 y negativos', () {
-      expect(Validators.age('0'), isNotNull);
-      expect(Validators.age('-5'), isNotNull);
-    });
-
-    test('rechaza edades absurdas', () {
-      expect(Validators.age('200'), isNotNull);
-    });
-
-    test('acepta edades válidas', () {
-      expect(Validators.age('28'), isNull);
-    });
-  });
-
   group('Validators.sets / reps / durationSeconds', () {
     test('sets requiere al menos 1', () {
       expect(Validators.sets('0'), isNotNull);

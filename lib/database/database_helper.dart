@@ -14,7 +14,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'lift_xto.db';
-  static const _dbVersion = 4;
+  static const _dbVersion = 5;
   static const _uuid = Uuid();
 
   /// Tablas que participan de la sincronización con Firestore (ver
@@ -107,6 +107,7 @@ class DatabaseHelper {
         last_name TEXT,
         height_cm REAL,
         age INTEGER,
+        birth_date TEXT,
         gender TEXT,
         $_syncColumnsSql
       )
@@ -196,6 +197,39 @@ class DatabaseHelper {
             'muscle_group': assignment.primary.first.name,
             'sync_status': 'pending',
             'updated_at': now,
+          },
+          where: 'id = ?',
+          whereArgs: [row['id']],
+        );
+      }
+      await batch.commit(noResult: true);
+    }
+    if (oldVersion < 5) {
+      // v5: la edad pasa de ingresarse a mano a calcularse desde la fecha
+      // de nacimiento. Backfill best-effort para perfiles que ya tenían
+      // una edad cargada: no sabemos el día/mes real, así que se aproxima
+      // al 1 de enero del año de nacimiento estimado (alcanza para que el
+      // IMC/perfil no se vean "vacíos" tras la migración; el usuario puede
+      // corregir la fecha exacta después desde Cuerpo → Editar).
+      await db.execute('ALTER TABLE user_profile ADD COLUMN birth_date TEXT');
+      final rows = await db.query(
+        'user_profile',
+        columns: ['id', 'age'],
+        where: 'age IS NOT NULL',
+      );
+      final now = DateTime.now();
+      final nowIso = now.toUtc().toIso8601String();
+      final batch = db.batch();
+      for (final row in rows) {
+        final age = row['age'] as int?;
+        if (age == null) continue;
+        final birthYear = now.year - age;
+        batch.update(
+          'user_profile',
+          {
+            'birth_date': DateTime(birthYear, 1, 1).toIso8601String(),
+            'sync_status': 'pending',
+            'updated_at': nowIso,
           },
           where: 'id = ?',
           whereArgs: [row['id']],
@@ -569,6 +603,23 @@ class DatabaseHelper {
     );
     total += (tombstones.first['c'] as int?) ?? 0;
     return total;
+  }
+
+  /// Borra todos los datos locales (rutina, logs, peso, perfil) pero deja
+  /// el schema intacto. La usa `SyncService` cuando detecta que la sesión
+  /// activa cambió a una cuenta distinta de la que generó los datos
+  /// actuales en este dispositivo — si no, al cambiar de cuenta en el
+  /// mismo dispositivo se seguían viendo los datos de la cuenta anterior
+  /// hasta que el próximo pull trajera algo que los pisara (y si la cuenta
+  /// nueva no tenía nada en Firestore, nunca se pisaban).
+  Future<void> clearLocalData() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      for (final table in syncTables) {
+        await txn.delete(table);
+      }
+      await txn.delete('sync_tombstones');
+    });
   }
 
   /// Inserta o actualiza una fila local a partir de un documento remoto ya

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/app_exception.dart';
 import '../sync/auth_repository.dart';
 import '../utils/feedback.dart';
 import '../utils/validators.dart';
+import '../widgets/google_logo.dart';
 
 /// Puerta de acceso obligatoria: sin sesión no se entra a la app. Ofrece
 /// Google Sign-In o email/contraseña (con alta de cuenta y recuperación de
@@ -67,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (Validators.email(email) != null) {
       showErrorSnackBar(
         context,
-        const _PlainMessage('Ingresa tu correo arriba primero.'),
+        const AppException('Ingresa tu correo arriba primero.'),
       );
       return;
     }
@@ -100,18 +102,12 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.fitness_center,
-                    color: scheme.onPrimary,
-                    size: 48,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Image.asset(
+                    'assets/icon/icon.png',
+                    width: 96,
+                    height: 96,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -120,14 +116,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Inicia sesión para guardar tu rutina, tu progreso y tu '
-                  'peso corporal, y tenerlos sincronizados en cualquier '
-                  'dispositivo.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 32),
                 if (!auth.isAvailable)
@@ -151,29 +139,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   )
                 else ...[
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _busy ? null : _signInWithGoogle,
-                      icon: const Icon(Icons.login),
-                      label: const Text('Iniciar sesión con Google'),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: scheme.outlineVariant)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          'o',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
-                        ),
-                      ),
-                      Expanded(child: Divider(color: scheme.outlineVariant)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
                   Form(
                     key: _formKey,
                     child: Column(
@@ -210,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 12),
                         SizedBox(
                           width: double.infinity,
-                          child: OutlinedButton.icon(
+                          child: FilledButton.icon(
                             onPressed: _busy ? null : _submitEmailForm,
                             icon: _busy
                                 ? const SizedBox(
@@ -244,6 +209,29 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: scheme.outlineVariant)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'o',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: scheme.outlineVariant)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : _signInWithGoogle,
+                      icon: const GoogleLogo(),
+                      label: const Text('Iniciar sesión con Google'),
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -252,14 +240,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-}
-
-/// Wrapper mínimo para mostrar un mensaje de validación local (no viene de
-/// una excepción real) a través del mismo `showErrorSnackBar`.
-class _PlainMessage implements Exception {
-  const _PlainMessage(this.message);
-  final String message;
-
-  @override
-  String toString() => message;
 }

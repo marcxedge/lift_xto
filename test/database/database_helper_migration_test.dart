@@ -16,8 +16,8 @@ void main() {
   });
 
   test(
-    'el backfill v2→v3→v4 completa sync + muscle_group en filas '
-    'preexistentes sin perder datos',
+    'el backfill v2→v3→v4→v5 completa sync + muscle_group + birth_date '
+    'en filas preexistentes sin perder datos',
     () async {
       final path = join(await getDatabasesPath(), 'lift_xto.db');
       await databaseFactory.deleteDatabase(path);
@@ -96,10 +96,16 @@ void main() {
         'tracking_type': 'weight',
         'order_index': 1,
       });
+      await legacyDb.insert('user_profile', {
+        'id': 1,
+        'first_name': 'Mario',
+        'height_cm': 175.0,
+        'age': 28,
+      });
       await legacyDb.close();
 
-      // 2) Abrimos con DatabaseHelper (versión actual = 4): dispara
-      //    onUpgrade encadenando los bloques v3 y v4.
+      // 2) Abrimos con DatabaseHelper (versión actual = 5): dispara
+      //    onUpgrade encadenando los bloques v3, v4 y v5.
       final db = await DatabaseHelper.instance.database;
       final rows = await db.query(
         'exercises',
@@ -148,6 +154,18 @@ void main() {
       // 4) La tabla de tombstones también debe existir y estar vacía.
       final tombstones = await db.query('sync_tombstones');
       expect(tombstones, isEmpty);
+
+      // 5) El backfill v5 debe convertir la edad vieja en una fecha de
+      //    nacimiento aproximada (1 de enero del año estimado), sin perder
+      //    el resto del perfil, y marcarlo pending para resubir.
+      final profileRow =
+          (await db.query('user_profile', where: 'id = ?', whereArgs: [1]))
+              .first;
+      expect(profileRow['first_name'], 'Mario');
+      expect(profileRow['height_cm'], 175.0);
+      final expectedYear = DateTime.now().year - 28;
+      expect(profileRow['birth_date'], '$expectedYear-01-01T00:00:00.000');
+      expect(profileRow['sync_status'], 'pending');
     },
   );
 }
