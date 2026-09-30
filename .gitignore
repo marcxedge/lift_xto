@@ -51,3 +51,9 @@ app.*.map.json
 /ios/Runner/GoogleService-Info.plist
 /lib/firebase_options.dart
 /firebase.json
+
+# Clave de cuenta de servicio para scripts/upload_exercise_media.js —
+# NUNCA se sube a git (ver instrucciones en ese mismo script).
+/scripts/serviceAccountKey.json
+/scripts/node_modules/
+

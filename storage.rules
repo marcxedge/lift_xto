@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Reglas de Firebase Storage para Lift.xto. Pegar esto en Firebase Console →
+// Storage → Reglas (mismo mecanismo manual que firestore.rules — ver
+// README → Sincronización).
+//
+// exercise_catalog/** son las imágenes/GIFs del catálogo de referencia
+// (© Gym visual, ver scripts/upload_exercise_media.js): sólo lectura desde
+// la app, nadie escribe desde el cliente — la carga la hace una sola vez
+// un script con credenciales de administrador (bypassa estas reglas).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /exercise_catalog/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

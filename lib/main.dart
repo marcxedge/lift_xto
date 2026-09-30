@@ -9,6 +9,7 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'database/database_helper.dart';
 import 'models/user_profile.dart';
 import 'repositories/body_weight_repository.dart';
+import 'repositories/exercise_catalog_repository.dart';
 import 'repositories/exercise_log_repository.dart';
 import 'repositories/exercise_repository.dart';
 import 'repositories/profile_repository.dart';
@@ -106,6 +107,7 @@ class LiftXtoApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => ProfileRepository(db, syncService),
         ),
+        Provider(create: (_) => ExerciseCatalogRepository()),
       ],
       child: ValueListenableBuilder<ThemeMode>(
         valueListenable: ThemeController.instance.mode,

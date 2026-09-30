@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/catalog_exercise.dart';
 import '../models/exercise.dart';
 import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
 import '../utils/muscle_groups.dart';
 import '../utils/validators.dart';
+import 'exercise_catalog_screen.dart';
 
 class AddEditExerciseScreen extends StatefulWidget {
   const AddEditExerciseScreen({
@@ -73,6 +75,17 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
     _durationMax.dispose();
     _notes.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFromCatalog() async {
+    final chosen = await Navigator.of(context).push<CatalogExercise>(
+      MaterialPageRoute(builder: (_) => const ExerciseCatalogScreen()),
+    );
+    if (chosen == null) return;
+    setState(() {
+      _name.text = chosen.name;
+      if (chosen.muscleGroup != null) _muscleGroup = chosen.muscleGroup;
+    });
   }
 
   Future<void> _save() async {
@@ -156,6 +169,12 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
                 prefixIcon: Icon(Icons.fitness_center),
               ),
               validator: Validators.requiredText,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _pickFromCatalog,
+              icon: const Icon(Icons.menu_book_outlined),
+              label: const Text('Elegir del catálogo'),
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<MuscleGroup>(

@@ -7,6 +7,7 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 - ✅ Rutina semanal vacía por defecto (Lunes a Sábado) — cada usuario arma la suya desde cero
 - ✅ Editar / eliminar / agregar ejercicios en cualquier día (incluido Miércoles)
 - ✅ Categorización muscular manual: al crear un ejercicio eliges su grupo muscular (18 grupos específicos) desde un combo, en vez de depender de detectarlo por el nombre
+- ✅ Catálogo de referencia de ~1300 ejercicios (buscar, filtrar por músculo, ver instrucciones paso a paso en español y GIF de la técnica) para precargar nombre + músculo al crear un ejercicio — ver [Catálogo de ejercicios](#catálogo-de-ejercicios)
 - ✅ Mapa muscular visual que refleja el volumen trabajado por grupo, usando esa categorización
 - ✅ Registro de peso (kg) × sets × reps por sesión
 - ✅ Registro de duración (segundos) para planchas y cardio
@@ -97,7 +98,8 @@ lib/
 │   ├── exercise_repository.dart       # CRUD ejercicios (ChangeNotifier)
 │   ├── exercise_log_repository.dart   # CRUD logs + PR + resumen de progreso
 │   ├── body_weight_repository.dart    # CRUD peso corporal
-│   └── profile_repository.dart        # Perfil de usuario
+│   ├── profile_repository.dart        # Perfil de usuario
+│   └── exercise_catalog_repository.dart # Catálogo de referencia (asset estático, sólo lectura)
 ├── sync/
 │   ├── auth_repository.dart        # Google Sign-In + email/contraseña (firebase_auth), degrada sin Firebase
 │   └── sync_service.dart           # Push/pull outbox contra Firestore
@@ -105,7 +107,8 @@ lib/
 │   ├── exercise.dart
 │   ├── exercise_log.dart
 │   ├── body_weight_log.dart
-│   └── user_profile.dart
+│   ├── user_profile.dart
+│   └── catalog_exercise.dart       # Ejercicio del catálogo de referencia
 ├── screens/
 │   ├── login_screen.dart           # Puerta de acceso obligatoria (Google o email/contraseña)
 │   ├── profile_setup_screen.dart   # Configuración de perfil obligatoria (primer inicio)
@@ -113,6 +116,7 @@ lib/
 │   ├── routine_screen.dart         # Vista de los 7 días
 │   ├── day_exercises_screen.dart   # Ejercicios de un día
 │   ├── add_edit_exercise_screen.dart
+│   ├── exercise_catalog_screen.dart # Buscar/filtrar en el catálogo de referencia
 │   ├── exercise_detail_screen.dart # Historial + gráfico + PR
 │   ├── progress_screen.dart        # Resumen de PRs + mapa muscular
 │   ├── muscle_map_tab.dart         # Mapa muscular por volumen y grupo elegido a mano
@@ -124,6 +128,7 @@ lib/
 │   ├── sync_status_button.dart     # Ícono ☁️ de estado de sync en el AppBar (toca = sincronizar/confirmar)
 │   ├── app_menu_button.dart        # Menú ⋮: cambiar tema + cerrar sesión
 │   ├── google_logo.dart            # Ícono "G" para el botón de Google Sign-In
+│   ├── catalog_exercise_media.dart # Miniatura/GIF del catálogo vía Firebase Storage (con fallback)
 │   └── state_views.dart            # LoadingView + EmptyStateView reutilizables
 └── utils/
     ├── constants.dart              # Días de la semana, tracking types
@@ -239,6 +244,42 @@ SyncService.requestSync()  (fire-and-forget, no bloquea la UI)
 4. Habilitar **Authentication → Sign-in method → Google** y, si querés ofrecer también login por email/contraseña, **Email/Password**.
 5. Habilitar **Firestore Database** y pegar las reglas de [`firestore.rules`](firestore.rules) en la consola.
 6. Descargar `google-services.json` y ponerlo en `android/app/` (está en `.gitignore`; hay un `google-services.json.example` como referencia de formato).
+7. (Opcional) Si querés las imágenes/GIFs del catálogo de ejercicios, habilitar **Storage** y pegar las reglas de [`storage.rules`](storage.rules) en la consola — ver [Catálogo de ejercicios](#catálogo-de-ejercicios).
+
+## Catálogo de ejercicios
+
+Al crear un ejercicio (`AddEditExerciseScreen`), el botón "Elegir del
+catálogo" abre `ExerciseCatalogScreen`: buscar por nombre, filtrar por
+músculo, y elegir uno precarga el nombre + grupo muscular en el formulario.
+El catálogo viene del dataset
+[hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset)
+(~1300 ejercicios, licencia MIT para el texto).
+
+Está dividido en dos partes con licencias distintas:
+
+- **Texto (nombre, categoría, equipo, instrucciones en español, músculo)**:
+  MIT, ya está bundleado en `assets/data/exercise_catalog.json`
+  (generado por `scripts/build_exercise_catalog.py`, que mapea el
+  `target` del dataset a los 18 grupos de
+  `lib/utils/muscle_groups.dart`). Funciona siempre, sin Firebase.
+- **Media (miniaturas + GIFs de la técnica)**: © [Gym visual](https://gymvisual.com/),
+  redistribuida en el dataset original bajo permiso específico para ESE
+  repo — clonarlo **no** da licencia para reusarla en otro proyecto. Si
+  vas a mostrarla acá, revisá los términos de Gym visual primero.
+
+Si decidís incluir la media, no va bundleada en la app (son ~140MB): se
+sube una sola vez a Firebase Storage y `CatalogExerciseMedia`
+(`lib/widgets/catalog_exercise_media.dart`) la descarga/cachea bajo demanda
+cuando el usuario busca o abre un ejercicio del catálogo — si Storage no
+está configurado o el archivo no se subió, se degrada a un ícono en vez de
+romper la pantalla. Para subirla:
+
+1. Descargar el dataset completo (con `images/` y `videos/`) desde GitHub.
+2. Firebase Console → Configuración del proyecto → Cuentas de servicio →
+   Generar nueva clave privada → guardarla como
+   `scripts/serviceAccountKey.json` (gitignored).
+3. `cd scripts && npm install firebase-admin`
+4. `node upload_exercise_media.js "C:/ruta/al/exercises-dataset-main"`
 
 ## Seguridad
 

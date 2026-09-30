@@ -21,9 +21,11 @@ dependencies:
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.1
   cloud_firestore: ^5.4.4
+  firebase_storage: ^12.3.2
   google_sign_in: ^6.2.1
   connectivity_plus: ^6.1.0
   uuid: ^4.5.1
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:
@@ -36,6 +38,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/icon.png
+    - assets/data/exercise_catalog.json
 
 # Al final del archivo, fuera de cualquier otra sección:
 flutter_launcher_icons:
