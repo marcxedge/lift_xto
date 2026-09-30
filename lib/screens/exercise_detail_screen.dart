@@ -28,6 +28,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   Exercise? _exercise;
   List<ExerciseLog> _logsData = const [];
   bool _loading = true;
+  _ChartMetric _metric = _ChartMetric.weight;
 
   @override
   void initState() {
@@ -164,17 +165,61 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
           _StatsRow(logs: _logsData, isDuration: isDuration),
           const SizedBox(height: 16),
           if (_logsData.length >= 2) ...[
-            Text(
-              'Progreso',
-              style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              children: [
+                Text(
+                  'Progreso',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const Spacer(),
+                if (!isDuration)
+                  DropdownButton<_ChartMetric>(
+                    value: _metric,
+                    underline: const SizedBox.shrink(),
+                    isDense: true,
+                    items: const [
+                      DropdownMenuItem(
+                        value: _ChartMetric.weight,
+                        child: Text('Peso'),
+                      ),
+                      DropdownMenuItem(
+                        value: _ChartMetric.volume,
+                        child: Text('Volumen'),
+                      ),
+                      DropdownMenuItem(
+                        value: _ChartMetric.oneRm,
+                        child: Text('1RM estimado'),
+                      ),
+                    ],
+                    onChanged: (m) {
+                      if (m != null) setState(() => _metric = m);
+                    },
+                  ),
+              ],
             ),
+            if (!isDuration && _metric != _ChartMetric.weight) ...[
+              const SizedBox(height: 4),
+              Text(
+                _metric == _ChartMetric.volume
+                    ? 'Volumen = peso × series × repeticiones de cada sesión.'
+                    : '1RM estimado (fórmula de Epley): peso × (1 + reps ÷ 30).',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             SizedBox(
               height: 220,
               child: Card(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(8, 24, 16, 8),
-                  child: _ProgressChart(logs: _logsData, isDuration: isDuration),
+                  child: _ProgressChart(
+                    logs: _logsData,
+                    isDuration: isDuration,
+                    metric: isDuration ? _ChartMetric.weight : _metric,
+                  ),
                 ),
               ),
             ),
@@ -346,21 +391,45 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+/// Métrica que se grafica en [_ProgressChart] para ejercicios con carga.
+/// El peso solo no siempre refleja sobrecarga progresiva real: si las reps
+/// suben y el peso se mantiene, esa línea se ve plana aunque sí hubo
+/// progreso — volumen y 1RM estimado lo capturan.
+enum _ChartMetric { weight, volume, oneRm }
+
 class _ProgressChart extends StatelessWidget {
-  const _ProgressChart({required this.logs, required this.isDuration});
+  const _ProgressChart({
+    required this.logs,
+    required this.isDuration,
+    this.metric = _ChartMetric.weight,
+  });
 
   final List<ExerciseLog> logs;
   final bool isDuration;
+  final _ChartMetric metric;
+
+  double _valueFor(ExerciseLog l) {
+    if (isDuration) return l.durationSeconds?.toDouble() ?? 0;
+    final weight = l.weightKg ?? 0;
+    switch (metric) {
+      case _ChartMetric.weight:
+        return weight;
+      case _ChartMetric.volume:
+        final sets = l.setsCompleted ?? 0;
+        final reps = l.repsCompleted ?? 0;
+        return weight * sets * reps;
+      case _ChartMetric.oneRm:
+        final reps = l.repsCompleted ?? 0;
+        return weight * (1 + reps / 30);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final spots = <FlSpot>[];
     for (var i = 0; i < logs.length; i++) {
-      final l = logs[i];
-      final value = isDuration
-          ? (l.durationSeconds?.toDouble() ?? 0)
-          : (l.weightKg ?? 0);
+      final value = _valueFor(logs[i]);
       if (value > 0) spots.add(FlSpot(i.toDouble(), value));
     }
     if (spots.isEmpty) {
@@ -418,7 +487,9 @@ class _ProgressChart extends StatelessWidget {
                 }
                 final txt = isDuration
                     ? '${(value / 60).toStringAsFixed(0)}m'
-                    : value.toStringAsFixed(0);
+                    : value >= 1000
+                        ? '${(value / 1000).toStringAsFixed(1)}k'
+                        : value.toStringAsFixed(0);
                 return Text(
                   txt,
                   style: TextStyle(
