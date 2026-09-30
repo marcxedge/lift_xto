@@ -15,6 +15,8 @@ class Validators {
   static const bodyWeightMax = 300.0;
   static const heightMin = 50.0;
   static const heightMax = 250.0;
+  static const circumferenceMin = 1.0;
+  static const circumferenceMax = 300.0;
   /// Límites razonables para la fecha de nacimiento (ver `_datePicker` en
   /// `ProfileSetupScreen`/`ProfileSheet`): entre 1 y 120 años de edad.
   static const ageMin = 1;
@@ -56,6 +58,19 @@ class Validators {
     if (n == null) return 'Número inválido';
     if (n < heightMin || n > heightMax) {
       return 'Debe estar entre ${_fmt(heightMin)} y ${_fmt(heightMax)} cm';
+    }
+    return null;
+  }
+
+  /// Perímetro corporal (cintura, pecho, bíceps, etc.) en cm — siempre
+  /// opcional, el usuario mide sólo las zonas que quiere.
+  static String? circumference(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return null;
+    final n = parseDecimal(trimmed);
+    if (n == null) return 'Número inválido';
+    if (n < circumferenceMin || n > circumferenceMax) {
+      return 'Debe estar entre ${_fmt(circumferenceMin)} y ${_fmt(circumferenceMax)} cm';
     }
     return null;
   }

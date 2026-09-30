@@ -164,6 +164,7 @@ class SyncService extends ChangeNotifier {
   Future<void> _push() async {
     await _pushSimpleTable('exercises', _exerciseToDoc);
     await _pushSimpleTable('body_weight_logs', _bodyWeightToDoc);
+    await _pushSimpleTable('body_measurements', _bodyMeasurementToDoc);
     await _pushExerciseLogs();
     await _pushProfile();
     await _pushTombstones();
@@ -248,6 +249,7 @@ class SyncService extends ChangeNotifier {
     // ejercicios que ya tienen que existir localmente.
     await _pullSimpleTable('exercises', _exerciseFromDoc);
     await _pullSimpleTable('body_weight_logs', _bodyWeightFromDoc);
+    await _pullSimpleTable('body_measurements', _bodyMeasurementFromDoc);
     await _pullProfile();
     await _pullExerciseLogs();
   }
@@ -437,6 +439,38 @@ class SyncService extends ChangeNotifier {
         'updated_at': _fromTimestamp(data['updatedAt']),
         'date': data['date'],
         'weight_kg': data['weightKg'],
+        'notes': data['notes'],
+      };
+
+  Map<String, Object?> _bodyMeasurementToDoc(Map<String, Object?> row) => {
+        'updatedAt': _toTimestamp(row['updated_at'] as String?),
+        'deleted': false,
+        'date': row['date'],
+        'waistCm': row['waist_cm'],
+        'chestCm': row['chest_cm'],
+        'hipCm': row['hip_cm'],
+        'bicepCm': row['bicep_cm'],
+        'thighCm': row['thigh_cm'],
+        'calfCm': row['calf_cm'],
+        'neckCm': row['neck_cm'],
+        'notes': row['notes'],
+      };
+
+  Map<String, Object?> _bodyMeasurementFromDoc(
+    String syncId,
+    Map<String, Object?> data,
+  ) =>
+      {
+        'sync_id': syncId,
+        'updated_at': _fromTimestamp(data['updatedAt']),
+        'date': data['date'],
+        'waist_cm': data['waistCm'],
+        'chest_cm': data['chestCm'],
+        'hip_cm': data['hipCm'],
+        'bicep_cm': data['bicepCm'],
+        'thigh_cm': data['thighCm'],
+        'calf_cm': data['calfCm'],
+        'neck_cm': data['neckCm'],
         'notes': data['notes'],
       };
 

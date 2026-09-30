@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/exercise.dart';
 import '../models/user_profile.dart';
+import '../repositories/exercise_log_repository.dart';
 import '../repositories/exercise_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../utils/constants.dart';
@@ -22,28 +23,34 @@ class RoutineScreen extends StatefulWidget {
 class _RoutineScreenState extends State<RoutineScreen> {
   late final ExerciseRepository _exercises;
   late final ProfileRepository _profile;
+  late final ExerciseLogRepository _logs;
   late Future<Map<int, List<Exercise>>> _future;
   late Future<UserProfile> _profileFuture;
+  late Future<int> _streakFuture;
 
   @override
   void initState() {
     super.initState();
     _exercises = context.read<ExerciseRepository>();
     _profile = context.read<ProfileRepository>();
+    _logs = context.read<ExerciseLogRepository>();
     _future = _loadAllDays();
     _profileFuture = _loadProfile();
+    _streakFuture = _logs.currentStreak();
     // Patrón Observer: cualquier pantalla que escriba a través de estos
     // repositorios (agregar un ejercicio, editar el perfil) notifica acá
     // aunque esta pantalla esté "de fondo" dentro del IndexedStack del
     // HomeScreen, sin necesitar reiniciar la app.
     _exercises.addListener(_refresh);
     _profile.addListener(_refresh);
+    _logs.addListener(_refresh);
   }
 
   @override
   void dispose() {
     _exercises.removeListener(_refresh);
     _profile.removeListener(_refresh);
+    _logs.removeListener(_refresh);
     super.dispose();
   }
 
@@ -62,6 +69,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
     setState(() {
       _future = _loadAllDays();
       _profileFuture = _loadProfile();
+      _streakFuture = _logs.currentStreak();
     });
   }
 
@@ -94,16 +102,31 @@ class _RoutineScreenState extends State<RoutineScreen> {
       appBar: AppBar(
         toolbarHeight: 72,
         titleSpacing: 16,
-        title: FutureBuilder<UserProfile>(
-          future: _profileFuture,
-          builder: (context, snap) {
-            final profile = snap.data;
-            return _GreetingTitle(
-              greeting: _greeting(),
-              profile: profile,
-              onAvatarTap: profile == null ? null : () => _openProfile(profile),
-            );
-          },
+        title: Row(
+          children: [
+            Expanded(
+              child: FutureBuilder<UserProfile>(
+                future: _profileFuture,
+                builder: (context, snap) {
+                  final profile = snap.data;
+                  return _GreetingTitle(
+                    greeting: _greeting(),
+                    profile: profile,
+                    onAvatarTap:
+                        profile == null ? null : () => _openProfile(profile),
+                  );
+                },
+              ),
+            ),
+            FutureBuilder<int>(
+              future: _streakFuture,
+              builder: (context, snap) {
+                final streak = snap.data ?? 0;
+                if (streak <= 0) return const SizedBox.shrink();
+                return _StreakBadge(streak: streak);
+              },
+            ),
+          ],
         ),
         actions: const [SyncStatusButton(), AppMenuButton()],
       ),
@@ -275,6 +298,51 @@ class _DayCard extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Racha de días consecutivos entrenados según lo programado en la rutina
+/// (ver `computeStreak()` en `lib/utils/streak.dart`). Sólo se muestra si
+/// hay racha activa (>0) — no tiene sentido mostrar "0" como si fuera un
+/// logro.
+class _StreakBadge extends StatelessWidget {
+  const _StreakBadge({required this.streak});
+
+  final int streak;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'Racha: $streak día${streak == 1 ? '' : 's'} seguidos '
+          'entrenando según tu rutina',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: scheme.tertiaryContainer,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.local_fire_department,
+              size: 16,
+              color: scheme.onTertiaryContainer,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '$streak',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: scheme.onTertiaryContainer,
+                fontSize: 14,
+              ),
+            ),
+          ],
         ),
       ),
     );

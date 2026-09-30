@@ -2,6 +2,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/body_measurement.dart';
 import '../models/exercise.dart';
 import '../models/exercise_log.dart';
 import '../models/body_weight_log.dart';
@@ -14,7 +15,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const _dbName = 'lift_xto.db';
-  static const _dbVersion = 5;
+  static const _dbVersion = 6;
   static const _uuid = Uuid();
 
   /// Tablas que participan de la sincronización con Firestore (ver
@@ -25,6 +26,7 @@ class DatabaseHelper {
     'exercise_logs',
     'body_weight_logs',
     'user_profile',
+    'body_measurements',
   ];
 
   Database? _db;
@@ -101,6 +103,22 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
+      CREATE TABLE body_measurements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        waist_cm REAL,
+        chest_cm REAL,
+        hip_cm REAL,
+        bicep_cm REAL,
+        thigh_cm REAL,
+        calf_cm REAL,
+        neck_cm REAL,
+        notes TEXT,
+        $_syncColumnsSql
+      )
+    ''');
+
+    await db.execute('''
       CREATE TABLE user_profile (
         id INTEGER PRIMARY KEY,
         first_name TEXT,
@@ -124,6 +142,9 @@ class DatabaseHelper {
     );
     await db.execute(
       'CREATE INDEX idx_bw_date ON body_weight_logs(date)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_bm_date ON body_measurements(date)',
     );
 
     // Sin seed: una instalación nueva arranca sin ejercicios, para que cada
@@ -155,7 +176,20 @@ class DatabaseHelper {
       // v3: columnas de sincronización con Firestore + tabla de tombstones
       // para propagar borrados. El backfill genera un UUID v4 por fila
       // existente directamente en SQL (randomblob), sin loop en Dart.
-      for (final table in syncTables) {
+      //
+      // Ojo: acá usamos una lista fija de las tablas que existían en v3, NO
+      // `syncTables` (que ya incluye tablas agregadas en versiones
+      // posteriores, como `body_measurements` en v6) — esas tablas nuevas
+      // ya nacen con las columnas de sync en su propio `CREATE TABLE`, no
+      // necesitan este backfill con `ALTER TABLE` sobre una tabla que en
+      // v3 todavía no existía.
+      const tablesAtV3 = [
+        'exercises',
+        'exercise_logs',
+        'body_weight_logs',
+        'user_profile',
+      ];
+      for (final table in tablesAtV3) {
         await db.execute('ALTER TABLE $table ADD COLUMN sync_id TEXT');
         await db.execute(
           "ALTER TABLE $table ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'",
@@ -236,6 +270,28 @@ class DatabaseHelper {
         );
       }
       await batch.commit(noResult: true);
+    }
+    if (oldVersion < 6) {
+      // v6: medidas corporales (cintura, pecho, cadera, bíceps, muslo,
+      // pantorrilla, cuello) — tabla nueva, no hay backfill posible.
+      await db.execute('''
+        CREATE TABLE body_measurements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+          waist_cm REAL,
+          chest_cm REAL,
+          hip_cm REAL,
+          bicep_cm REAL,
+          thigh_cm REAL,
+          calf_cm REAL,
+          neck_cm REAL,
+          notes TEXT,
+          $_syncColumnsSql
+        )
+      ''');
+      await db.execute(
+        'CREATE INDEX idx_bm_date ON body_measurements(date)',
+      );
     }
   }
 
@@ -496,6 +552,34 @@ class DatabaseHelper {
     return BodyWeightLog.fromMap(rows.first);
   }
 
+  // ─────────────────────────── BODY MEASUREMENTS ───────────────────────────
+
+  Future<int> insertBodyMeasurement(BodyMeasurement m) async {
+    final db = await database;
+    return db.insert('body_measurements', _stampForInsert(m.toMap()));
+  }
+
+  Future<int> deleteBodyMeasurement(int id) async {
+    final db = await database;
+    final rows = await db.query(
+      'body_measurements',
+      columns: ['sync_id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      await _tombstone(db, 'body_measurements', rows.first['sync_id'] as String?);
+    }
+    return db.delete('body_measurements', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<BodyMeasurement>> getAllBodyMeasurements() async {
+    final db = await database;
+    final rows = await db.query('body_measurements', orderBy: 'date ASC');
+    return rows.map(BodyMeasurement.fromMap).toList();
+  }
+
   // ─────────────────────────── USER PROFILE ───────────────────────────
 
   Future<UserProfile> getProfile() async {
@@ -564,6 +648,29 @@ class DatabaseHelper {
       ''',
       [since.toIso8601String().substring(0, 10)],
     );
+  }
+
+  /// Días de la semana (1=lunes..7=domingo, ISO 8601) que tienen al menos
+  /// un ejercicio asignado en la rutina actual — usado por
+  /// `computeStreak()` para saber qué días "cuentan" como entrenamiento
+  /// programado y cuáles son libres por diseño (no cortan la racha).
+  Future<Set<int>> getTrainingWeekdays() async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT DISTINCT day_of_week FROM exercises',
+    );
+    return rows.map((r) => r['day_of_week'] as int).toSet();
+  }
+
+  /// Fechas (sólo la parte de fecha, sin hora) que tienen al menos un
+  /// registro de ejercicio — usado por `computeStreak()`.
+  Future<Set<DateTime>> getExerciseLogDates() async {
+    final db = await database;
+    final rows = await db.rawQuery('SELECT DISTINCT date FROM exercise_logs');
+    return rows.map((r) {
+      final d = DateTime.parse(r['date'] as String);
+      return DateTime(d.year, d.month, d.day);
+    }).toSet();
   }
 
   // ─────────────────────────── SYNC SUPPORT ───────────────────────────

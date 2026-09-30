@@ -3,12 +3,15 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../models/body_measurement.dart';
 import '../models/body_weight_log.dart';
 import '../models/user_profile.dart';
+import '../repositories/body_measurement_repository.dart';
 import '../repositories/body_weight_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../utils/feedback.dart';
 import '../widgets/app_menu_button.dart';
+import '../widgets/body_measurement_sheet.dart';
 import '../widgets/body_weight_sheet.dart';
 import '../widgets/profile_sheet.dart';
 import '../widgets/state_views.dart';
@@ -27,25 +30,31 @@ class BodyScreen extends StatefulWidget {
 
 class _BodyScreenState extends State<BodyScreen> {
   late final BodyWeightRepository _weightRepo;
+  late final BodyMeasurementRepository _measurementRepo;
   late final ProfileRepository _profileRepo;
 
   List<BodyWeightLog>? _logs;
+  List<BodyMeasurement>? _measurements;
   UserProfile? _profile;
   bool _loading = true;
+  MeasurementField _measurementField = MeasurementField.waist;
 
   @override
   void initState() {
     super.initState();
     _weightRepo = context.read<BodyWeightRepository>();
+    _measurementRepo = context.read<BodyMeasurementRepository>();
     _profileRepo = context.read<ProfileRepository>();
     _load();
     _weightRepo.addListener(_load);
+    _measurementRepo.addListener(_load);
     _profileRepo.addListener(_load);
   }
 
   @override
   void dispose() {
     _weightRepo.removeListener(_load);
+    _measurementRepo.removeListener(_load);
     _profileRepo.removeListener(_load);
     super.dispose();
   }
@@ -53,10 +62,12 @@ class _BodyScreenState extends State<BodyScreen> {
   Future<void> _load() async {
     try {
       final logs = await _weightRepo.getAll();
+      final measurements = await _measurementRepo.getAll();
       final profile = await _profileRepo.get();
       if (!mounted) return;
       setState(() {
         _logs = logs;
+        _measurements = measurements;
         _profile = profile;
         _loading = false;
       });
@@ -92,6 +103,23 @@ class _BodyScreenState extends State<BodyScreen> {
     }
   }
 
+  Future<void> _addMeasurement() async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const BodyMeasurementSheet(),
+    );
+  }
+
+  Future<void> _deleteMeasurement(BodyMeasurement m) async {
+    if (m.id == null) return;
+    try {
+      await _measurementRepo.delete(m.id!);
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -114,6 +142,7 @@ class _BodyScreenState extends State<BodyScreen> {
   Widget _buildContent(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final logs = _logs ?? const [];
+    final measurements = _measurements ?? const [];
     final profile = _profile;
     final latest = logs.isEmpty ? null : logs.last;
 
@@ -242,6 +271,14 @@ class _BodyScreenState extends State<BodyScreen> {
             ),
             const SizedBox(height: 16),
           ],
+          _MeasurementsSection(
+            measurements: measurements,
+            field: _measurementField,
+            onFieldChanged: (f) => setState(() => _measurementField = f),
+            onAdd: _addMeasurement,
+            onDelete: _deleteMeasurement,
+          ),
+          const SizedBox(height: 16),
           Card(
             color: scheme.surfaceContainerHigh,
             child: Padding(
@@ -809,4 +846,251 @@ class _BmiScale extends StatelessWidget {
 
   TextStyle _scaleLabelStyle(BuildContext context) =>
       TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant);
+}
+
+/// Sección de medidas corporales (cintura, pecho, bíceps, etc.), debajo del
+/// historial de peso — complementa el peso/IMC con composición corporal
+/// aproximada: si el peso se mantiene pero la cintura baja y el bíceps
+/// sube, hay progreso aunque la balanza no lo muestre.
+class _MeasurementsSection extends StatelessWidget {
+  const _MeasurementsSection({
+    required this.measurements,
+    required this.field,
+    required this.onFieldChanged,
+    required this.onAdd,
+    required this.onDelete,
+  });
+
+  final List<BodyMeasurement> measurements;
+  final MeasurementField field;
+  final ValueChanged<MeasurementField> onFieldChanged;
+  final VoidCallback onAdd;
+  final void Function(BodyMeasurement) onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    // Sólo las sesiones que tienen un valor cargado para la métrica elegida
+    // entran al gráfico — el resto puede tener otras zonas medidas.
+    final points = measurements
+        .where((m) => field.valueIn(m) != null)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Medidas corporales',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Registrar'),
+            ),
+          ],
+        ),
+        if (measurements.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(8),
+              child: EmptyStateView(
+                icon: Icons.straighten,
+                title: 'Aún no registras medidas',
+                subtitle:
+                    'Complementa el peso/IMC con cintura, pecho, bíceps, '
+                    'etc. — útil para ver composición corporal, no sólo '
+                    'peso total.',
+              ),
+            ),
+          )
+        else ...[
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final f in MeasurementField.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(f.label),
+                      selected: field == f,
+                      onSelected: (_) => onFieldChanged(f),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (points.length >= 2)
+            SizedBox(
+              height: 180,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 20, 16, 8),
+                  child: _MeasurementChart(points: points, field: field),
+                ),
+              ),
+            )
+          else
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Registra al menos 2 medidas de "${field.label}" para '
+                  'ver el gráfico de evolución.',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          ...measurements.reversed.map(
+            (m) => _MeasurementTile(measurement: m, onDelete: () => onDelete(m)),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MeasurementChart extends StatelessWidget {
+  const _MeasurementChart({required this.points, required this.field});
+
+  final List<BodyMeasurement> points;
+  final MeasurementField field;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final spots = <FlSpot>[
+      for (var i = 0; i < points.length; i++)
+        FlSpot(i.toDouble(), field.valueIn(points[i])!),
+    ];
+    final minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final pad = (maxY - minY) * 0.2 + 0.5;
+
+    return LineChart(
+      LineChartData(
+        minY: minY - pad,
+        maxY: maxY + pad,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          getDrawingHorizontalLine: (_) =>
+              FlLine(color: scheme.outlineVariant, strokeWidth: 1),
+        ),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(),
+          rightTitles: const AxisTitles(),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              interval: (points.length / 4).ceilToDouble().clamp(1, 999),
+              getTitlesWidget: (value, meta) {
+                final i = value.toInt();
+                if (i < 0 || i >= points.length) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    DateFormat('d/M').format(points[i].date),
+                    style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+                  ),
+                );
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 32,
+              getTitlesWidget: (value, meta) {
+                if (value == meta.max || value == meta.min) {
+                  return const SizedBox.shrink();
+                }
+                return Text(
+                  value.toStringAsFixed(0),
+                  style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
+                );
+              },
+            ),
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            curveSmoothness: 0.25,
+            color: scheme.tertiary,
+            barWidth: 3,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
+                radius: 3,
+                color: scheme.tertiary,
+                strokeWidth: 0,
+              ),
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              color: scheme.tertiary.withValues(alpha: 0.12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MeasurementTile extends StatelessWidget {
+  const _MeasurementTile({required this.measurement, required this.onDelete});
+
+  final BodyMeasurement measurement;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final parts = <String>[
+      for (final f in MeasurementField.values)
+        if (f.valueIn(measurement) != null)
+          '${f.label} ${_fmt(f.valueIn(measurement)!)}cm',
+    ];
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            DateFormat('d').format(measurement.date),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        title: Text(
+          parts.join(' · '),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
+        subtitle: Text(DateFormat('d MMM yyyy', 'es').format(measurement.date)),
+        trailing: IconButton(
+          icon: Icon(Icons.delete_outline, color: scheme.outline),
+          onPressed: onDelete,
+        ),
+      ),
+    );
+  }
+
+  String _fmt(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 }

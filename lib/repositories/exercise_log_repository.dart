@@ -6,6 +6,7 @@ import '../models/exercise.dart';
 import '../models/exercise_log.dart';
 import '../sync/sync_service.dart';
 import '../utils/muscle_groups.dart';
+import '../utils/streak.dart';
 
 /// Resumen agregado (PR, último registro, sesiones) de un ejercicio. Usado
 /// por la tab de Progreso.
@@ -149,6 +150,18 @@ class ExerciseLogRepository extends ChangeNotifier {
           .toList();
     } catch (e) {
       throw AppException('No se pudo cargar el mapa muscular.', cause: e);
+    }
+  }
+
+  /// Racha actual de días consecutivos entrenados según lo programado en
+  /// la rutina — ver `computeStreak()` en `lib/utils/streak.dart`.
+  Future<int> currentStreak() async {
+    try {
+      final weekdays = await _db.getTrainingWeekdays();
+      final dates = await _db.getExerciseLogDates();
+      return computeStreak(trainingWeekdays: weekdays, loggedDates: dates);
+    } catch (e) {
+      throw AppException('No se pudo calcular la racha.', cause: e);
     }
   }
 }

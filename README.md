@@ -14,6 +14,8 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 - ✅ Gráfico de evolución por ejercicio con `fl_chart`
 - ✅ Récord personal (PR) y resumen de sesiones
 - ✅ Pantalla de Cuerpo unificada: peso actual, IMC, escala visual y rango saludable juntos en una sola vista (antes eran 2 tabs separadas)
+- ✅ Medidas corporales (cintura, pecho, cadera, bíceps, muslo, pantorrilla, cuello) con gráfico de evolución por zona — complementa el peso/IMC con composición corporal aproximada
+- ✅ Racha de constancia: días consecutivos entrenados según lo programado en la rutina (los días libres no la cortan), visible en la pantalla de Rutina
 - ✅ Configuración de perfil (nombre, apellido, estatura y fecha de nacimiento) obligatoria la primera vez que se inicia sesión, antes de dejar entrar al resto de la app — la edad se calcula sola a partir de la fecha
 - ✅ Almacenamiento 100% local con SQLite
 - ✅ Material 3 con paleta **azul marino** (seed `#1E3A8A`)
@@ -98,6 +100,7 @@ lib/
 │   ├── exercise_repository.dart       # CRUD ejercicios (ChangeNotifier)
 │   ├── exercise_log_repository.dart   # CRUD logs + PR + resumen de progreso
 │   ├── body_weight_repository.dart    # CRUD peso corporal
+│   ├── body_measurement_repository.dart # CRUD medidas corporales
 │   ├── profile_repository.dart        # Perfil de usuario
 │   └── exercise_catalog_repository.dart # Catálogo de referencia (asset estático, sólo lectura)
 ├── sync/
@@ -107,6 +110,7 @@ lib/
 │   ├── exercise.dart
 │   ├── exercise_log.dart
 │   ├── body_weight_log.dart
+│   ├── body_measurement.dart       # Medidas corporales (7 zonas opcionales)
 │   ├── user_profile.dart
 │   └── catalog_exercise.dart       # Ejercicio del catálogo de referencia
 ├── screens/
@@ -124,6 +128,7 @@ lib/
 ├── widgets/
 │   ├── log_entry_sheet.dart        # Bottom sheet para registrar peso
 │   ├── body_weight_sheet.dart      # Bottom sheet para peso corporal
+│   ├── body_measurement_sheet.dart # Bottom sheet para medidas corporales
 │   ├── profile_sheet.dart          # Bottom sheet del perfil
 │   ├── sync_status_button.dart     # Ícono ☁️ de estado de sync en el AppBar (toca = sincronizar/confirmar)
 │   ├── app_menu_button.dart        # Menú ⋮: cambiar tema + cerrar sesión
@@ -135,7 +140,8 @@ lib/
     ├── validators.dart             # Validadores centralizados con rangos
     ├── feedback.dart               # showErrorSnackBar(context, error)
     ├── theme.dart                  # Material 3 theme (seed azul marino)
-    └── theme_controller.dart       # ValueNotifier + persistencia del modo
+    ├── theme_controller.dart       # ValueNotifier + persistencia del modo
+    └── streak.dart                 # computeStreak() — racha de constancia (función pura)
 ```
  
 ## Setup
@@ -174,6 +180,9 @@ exercise_logs (id, exercise_id, date, weight_kg, sets_completed,
                reps_completed, duration_seconds, notes)
  
 body_weight_logs (id, date, weight_kg, notes)
+ 
+body_measurements (id, date, waist_cm, chest_cm, hip_cm, bicep_cm,
+                    thigh_cm, calf_cm, neck_cm, notes)
  
 user_profile (id, first_name, last_name, height_cm, birth_date, gender)
 ```
