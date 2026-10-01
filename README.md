@@ -11,7 +11,7 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 - ✅ Mapa muscular visual que refleja el volumen trabajado por grupo, usando esa categorización
 - ✅ Registro de peso (kg) × sets × reps por sesión
 - ✅ Registro de duración (segundos) para planchas y cardio
-- ✅ Gráfico de evolución por ejercicio con `fl_chart`
+- ✅ Gráfico de evolución por ejercicio con `fl_chart`, con selector de métrica (peso levantado / volumen / 1RM estimado con fórmula de Epley) — el volumen y el 1RM revelan progreso que el peso solo no muestra si las reps suben
 - ✅ Récord personal (PR) y resumen de sesiones
 - ✅ Pantalla de Cuerpo unificada: peso actual, IMC, escala visual y rango saludable juntos en una sola vista (antes eran 2 tabs separadas)
 - ✅ Medidas corporales (cintura, pecho, cadera, bíceps, muslo, pantorrilla, cuello) con gráfico de evolución por zona — complementa el peso/IMC con composición corporal aproximada
@@ -28,17 +28,21 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 
 ## Capturas de pantalla
 
-| Login | Rutina semanal | Ejercicios del día |
+| Login | Perfil obligatorio | Rutina semanal (racha 🔥) |
 |---|---|---|
-| ![Login](docs/screenshots/login.png) | ![Rutina semanal](docs/screenshots/rutina_semanal.png) | ![Ejercicios del día](docs/screenshots/dia_ejercicios.png) |
+| ![Login](docs/screenshots/login.png) | ![Perfil obligatorio](docs/screenshots/perfil_configuracion.png) | ![Rutina semanal](docs/screenshots/rutina_semanal.png) |
 
-| Detalle + PR | Récords personales | Mapa muscular |
+| Ejercicios del día | Detalle + gráfico de peso | Gráfico de volumen |
 |---|---|---|
-| ![Detalle de ejercicio](docs/screenshots/detalle_ejercicio.png) | ![Progreso y PRs](docs/screenshots/progreso_prs.png) | ![Mapa muscular](docs/screenshots/mapa_muscular.png) |
+| ![Ejercicios del día](docs/screenshots/dia_ejercicios.png) | ![Detalle de ejercicio](docs/screenshots/detalle_ejercicio.png) | ![Selector de métrica: volumen](docs/screenshots/progreso_volumen.png) |
 
-| Cuerpo (perfil + peso + IMC) |
-|---|
-| ![Cuerpo](docs/screenshots/cuerpo.png) |
+| Récords personales | Mapa muscular | Catálogo — búsqueda |
+|---|---|---|
+| ![Progreso y PRs](docs/screenshots/progreso_prs.png) | ![Mapa muscular](docs/screenshots/mapa_muscular.png) | ![Catálogo de ejercicios](docs/screenshots/catalogo_busqueda.png) |
+
+| Catálogo — detalle con GIF | Cuerpo (peso + IMC) | Medidas corporales |
+|---|---|---|
+| ![Detalle del catálogo](docs/screenshots/catalogo_detalle.png) | ![Cuerpo](docs/screenshots/cuerpo.png) | ![Medidas corporales](docs/screenshots/medidas_corporales.png) |
 
 ## Arquitectura
 
