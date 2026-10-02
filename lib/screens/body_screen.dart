@@ -10,6 +10,8 @@ import '../repositories/body_measurement_repository.dart';
 import '../repositories/body_weight_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../utils/feedback.dart';
+import '../utils/responsive.dart';
+import '../utils/weight_unit.dart';
 import '../widgets/app_menu_button.dart';
 import '../widgets/body_measurement_sheet.dart';
 import '../widgets/body_weight_sheet.dart';
@@ -135,11 +137,16 @@ class _BodyScreenState extends State<BodyScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Registrar'),
       ),
-      body: _loading ? const LoadingView() : _buildContent(context),
+      body: _loading
+          ? const LoadingView()
+          : ValueListenableBuilder<WeightUnit>(
+              valueListenable: WeightUnitController.instance.unit,
+              builder: (context, unit, _) => _buildContent(context, unit),
+            ),
     );
   }
 
-  Widget _buildContent(BuildContext context) {
+  Widget _buildContent(BuildContext context, WeightUnit unit) {
     final scheme = Theme.of(context).colorScheme;
     final logs = _logs ?? const [];
     final measurements = _measurements ?? const [];
@@ -157,10 +164,17 @@ class _BodyScreenState extends State<BodyScreen> {
         ? null
         : _healthyRange(profile!.heightCm!);
 
-    return RefreshIndicator(
+    return Responsive.withMaxWidth(
+      context,
+      RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+        padding: EdgeInsets.fromLTRB(
+          Responsive.horizontalPadding(context),
+          16,
+          Responsive.horizontalPadding(context),
+          96,
+        ),
         children: [
           _ProfileCard(profile: profile, onEdit: _editProfile),
           const SizedBox(height: 16),
@@ -173,7 +187,9 @@ class _BodyScreenState extends State<BodyScreen> {
                 Expanded(
                   child: _BodyStatCard(
                     label: 'Peso actual',
-                    value: latest == null ? '—' : '${_fmt(latest.weightKg)} kg',
+                    value: latest == null
+                        ? '—'
+                        : WeightUnitController.instance.format(latest.weightKg),
                     subtitle: latest == null
                         ? 'Sin registros'
                         : DateFormat('d MMM', 'es').format(latest.date),
@@ -210,7 +226,7 @@ class _BodyScreenState extends State<BodyScreen> {
                 child: Card(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(8, 24, 16, 8),
-                    child: _BodyWeightChart(logs: logs),
+                    child: _BodyWeightChart(logs: logs, unit: unit),
                   ),
                 ),
               ),
@@ -249,7 +265,8 @@ class _BodyScreenState extends State<BodyScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '${_fmt(range.$1)} – ${_fmt(range.$2)} kg',
+                        '${WeightUnitController.instance.formatNumber(range.$1)} – '
+                        '${WeightUnitController.instance.format(range.$2)}',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -267,7 +284,11 @@ class _BodyScreenState extends State<BodyScreen> {
             Text('Historial', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ...logs.reversed.map(
-              (l) => _BodyWeightTile(log: l, onDelete: () => _deleteWeight(l)),
+              (l) => _BodyWeightTile(
+                log: l,
+                unit: unit,
+                onDelete: () => _deleteWeight(l),
+              ),
             ),
             const SizedBox(height: 16),
           ],
@@ -310,6 +331,7 @@ class _BodyScreenState extends State<BodyScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -322,14 +344,16 @@ class _BodyScreenState extends State<BodyScreen> {
     if (current < lo) {
       final diff = lo - current;
       return Text(
-        'Estás ${_fmt(diff)} kg por debajo del rango saludable.',
+        'Estás ${WeightUnitController.instance.format(diff)} por debajo del '
+        'rango saludable.',
         style: TextStyle(color: scheme.onSurface),
       );
     }
     if (current > hi) {
       final diff = current - hi;
       return Text(
-        'Estás ${_fmt(diff)} kg por encima del rango saludable.',
+        'Estás ${WeightUnitController.instance.format(diff)} por encima del '
+        'rango saludable.',
         style: TextStyle(color: scheme.onSurface),
       );
     }
@@ -468,12 +492,17 @@ class _BodyStatCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: highlight ? scheme.onPrimaryContainer : scheme.onSurface,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: highlight ? scheme.onPrimaryContainer : scheme.onSurface,
+                ),
               ),
             ),
             const SizedBox(height: 2),
@@ -485,7 +514,7 @@ class _BodyStatCard extends StatelessWidget {
                     ? scheme.onPrimaryContainer.withValues(alpha: 0.7)
                     : scheme.onSurfaceVariant,
               ),
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ],
@@ -534,18 +563,23 @@ class _ImcCell extends StatelessWidget {
                   style: TextStyle(fontSize: 12, color: Colors.white70),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  bmi!.toStringAsFixed(1),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    bmi!.toStringAsFixed(1),
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 Text(
                   category!.label,
                   style: const TextStyle(fontSize: 11, color: Colors.white),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -601,16 +635,17 @@ class _ImcCell extends StatelessWidget {
 }
 
 class _BodyWeightChart extends StatelessWidget {
-  const _BodyWeightChart({required this.logs});
+  const _BodyWeightChart({required this.logs, required this.unit});
 
   final List<BodyWeightLog> logs;
+  final WeightUnit unit;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final spots = <FlSpot>[];
     for (var i = 0; i < logs.length; i++) {
-      spots.add(FlSpot(i.toDouble(), logs[i].weightKg));
+      spots.add(FlSpot(i.toDouble(), unit.fromKg(logs[i].weightKg)));
     }
     final minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
     final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
@@ -697,17 +732,19 @@ class _BodyWeightChart extends StatelessWidget {
 }
 
 class _BodyWeightTile extends StatelessWidget {
-  const _BodyWeightTile({required this.log, required this.onDelete});
+  const _BodyWeightTile({
+    required this.log,
+    required this.unit,
+    required this.onDelete,
+  });
 
   final BodyWeightLog log;
+  final WeightUnit unit;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final w = log.weightKg;
-    final wStr =
-        w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toStringAsFixed(1);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -725,7 +762,7 @@ class _BodyWeightTile extends StatelessWidget {
           ),
         ),
         title: Text(
-          '$wStr kg',
+          WeightUnitController.instance.format(log.weightKg),
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: Text(
@@ -832,14 +869,18 @@ class _BmiScale extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(color: color),
       alignment: Alignment.center,
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          maxLines: 1,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        overflow: TextOverflow.ellipsis,
       ),
     );
   }

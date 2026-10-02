@@ -21,6 +21,7 @@ import 'sync/auth_repository.dart';
 import 'sync/sync_service.dart';
 import 'utils/theme.dart';
 import 'utils/theme_controller.dart';
+import 'utils/weight_unit.dart';
 import 'widgets/state_views.dart';
 
 Future<void> main() async {
@@ -32,6 +33,7 @@ Future<void> main() async {
   // Cargamos la preferencia de tema antes de levantar la UI para evitar un
   // flash entre claro/oscuro al iniciar.
   await ThemeController.instance.load();
+  await WeightUnitController.instance.load();
   // Disparamos la creación de la BD al iniciar para que la rutina por defecto
   // ya esté lista cuando se renderice la primera pantalla.
   final db = DatabaseHelper.instance;

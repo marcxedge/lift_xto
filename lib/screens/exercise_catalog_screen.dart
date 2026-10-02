@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/catalog_exercise.dart';
 import '../repositories/exercise_catalog_repository.dart';
 import '../utils/muscle_groups.dart';
+import '../utils/responsive.dart';
 import '../widgets/catalog_exercise_media.dart';
 import '../widgets/muscle_chip.dart';
 import '../widgets/state_views.dart';
@@ -69,7 +70,9 @@ class _ExerciseCatalogScreenState extends State<ExerciseCatalogScreen> {
     final results = _results;
     return Scaffold(
       appBar: AppBar(title: const Text('Catálogo de ejercicios')),
-      body: Column(
+      body: Responsive.withMaxWidth(
+        context,
+        Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -142,6 +145,7 @@ class _ExerciseCatalogScreenState extends State<ExerciseCatalogScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -206,7 +210,7 @@ class _CatalogExerciseTile extends StatelessWidget {
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
@@ -216,7 +220,7 @@ class _CatalogExerciseTile extends StatelessWidget {
                         fontStyle: FontStyle.italic,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
@@ -256,7 +260,9 @@ class _CatalogExercisePreview extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: Text(exercise.nameEs)),
-      body: ListView(
+      body: Responsive.withMaxWidth(
+        context,
+        ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [
           ClipRRect(
@@ -336,6 +342,7 @@ class _CatalogExercisePreview extends StatelessWidget {
             ),
           ],
         ],
+      ),
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),

@@ -17,9 +17,15 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 - ✅ Medidas corporales (cintura, pecho, cadera, bíceps, muslo, pantorrilla, cuello) con gráfico de evolución por zona — complementa el peso/IMC con composición corporal aproximada
 - ✅ Racha de constancia: días consecutivos entrenados según lo programado en la rutina (los días libres no la cortan), visible en la pantalla de Rutina
 - ✅ Configuración de perfil (nombre, apellido, estatura y fecha de nacimiento) obligatoria la primera vez que se inicia sesión, antes de dejar entrar al resto de la app — la edad se calcula sola a partir de la fecha
+- ✅ Unidad de peso configurable (**kg o lb**, desde el menú ⋮): un solo toggle convierte en vivo cada peso mostrado o ingresado en toda la app — internamente siempre se guarda en kg
+- ✅ Sugerencia de sobrecarga progresiva (auto-coach): al registrar una sesión, la app sugiere el peso/reps de la próxima según si llegaste al techo o piso de tu rango de reps objetivo
+- ✅ Alerta de posible estancamiento en Progreso: estadística simple (no IA) sobre tu propio historial que avisa si varios ejercicios dejaron de mejorar su 1RM estimado
+- ✅ "Tu resumen" compartible: kg/lb totales levantados, racha máxima histórica, músculo más trabajado y PRs destacados en una tarjeta que se puede compartir como imagen
 - ✅ Almacenamiento 100% local con SQLite
 - ✅ Material 3 con paleta **azul marino** (seed `#1E3A8A`)
-- ✅ Modo **claro por defecto**, con toggle claro / oscuro / sistema (desde el menú ⋮) persistente vía `SharedPreferences`
+- ✅ Tema **según el sistema por defecto**, con toggle sistema / claro / oscuro (desde el menú ⋮) persistente vía `SharedPreferences`
+- ✅ Diseño responsive: tamaños de texto y layout se adaptan a pantallas chicas y tablets (contenido centrado con ancho máximo), sin textos cortados ni elementos superpuestos
+- ✅ Confirmación antes de cerrar sesión
 - ✅ Arquitectura en capas (Repository + Observer) con inyección de dependencias vía `provider`
 - ✅ Validación de rangos centralizada y feedback visible de errores
 - ✅ Backups de Android deshabilitados y build de release minificado/ofuscado
@@ -43,6 +49,10 @@ App Flutter para llevar el seguimiento de tu rutina de gimnasio con **sobrecarga
 | Catálogo — detalle con GIF | Cuerpo (peso + IMC) | Medidas corporales |
 |---|---|---|
 | ![Detalle del catálogo](docs/screenshots/catalogo_detalle.png) | ![Cuerpo](docs/screenshots/cuerpo.png) | ![Medidas corporales](docs/screenshots/medidas_corporales.png) |
+
+| Sugerencia de progresión | Tu resumen (compartible) |
+|---|---|
+| ![Sugerencia de progresión](docs/screenshots/sugerencia_progresion.png) | ![Tu resumen](docs/screenshots/resumen_wrapped.png) |
 
 ## Arquitectura
 
@@ -125,17 +135,18 @@ lib/
 │   ├── day_exercises_screen.dart   # Ejercicios de un día
 │   ├── add_edit_exercise_screen.dart
 │   ├── exercise_catalog_screen.dart # Buscar/filtrar en el catálogo de referencia
-│   ├── exercise_detail_screen.dart # Historial + gráfico + PR
-│   ├── progress_screen.dart        # Resumen de PRs + mapa muscular
+│   ├── exercise_detail_screen.dart # Historial + gráfico + PR + sugerencia de progresión
+│   ├── progress_screen.dart        # Resumen de PRs + mapa muscular + alerta de estancamiento
 │   ├── muscle_map_tab.dart         # Mapa muscular por volumen y grupo elegido a mano
-│   └── body_screen.dart            # Cuerpo: perfil + peso + IMC en una sola vista
+│   ├── body_screen.dart            # Cuerpo: perfil + peso + IMC en una sola vista
+│   └── wrapped_screen.dart         # "Tu resumen" compartible (tipo Wrapped)
 ├── widgets/
-│   ├── log_entry_sheet.dart        # Bottom sheet para registrar peso
+│   ├── log_entry_sheet.dart        # Bottom sheet para registrar peso + tarjeta de sugerencia
 │   ├── body_weight_sheet.dart      # Bottom sheet para peso corporal
 │   ├── body_measurement_sheet.dart # Bottom sheet para medidas corporales
 │   ├── profile_sheet.dart          # Bottom sheet del perfil
 │   ├── sync_status_button.dart     # Ícono ☁️ de estado de sync en el AppBar (toca = sincronizar/confirmar)
-│   ├── app_menu_button.dart        # Menú ⋮: cambiar tema + cerrar sesión
+│   ├── app_menu_button.dart        # Menú ⋮: Tu resumen, tema, unidad de peso, cerrar sesión (con confirmación)
 │   ├── google_logo.dart            # Ícono "G" para el botón de Google Sign-In
 │   ├── catalog_exercise_media.dart # Miniatura/GIF del catálogo vía Firebase Storage (con fallback)
 │   └── state_views.dart            # LoadingView + EmptyStateView reutilizables
@@ -144,8 +155,13 @@ lib/
     ├── validators.dart             # Validadores centralizados con rangos
     ├── feedback.dart               # showErrorSnackBar(context, error)
     ├── theme.dart                  # Material 3 theme (seed azul marino)
-    ├── theme_controller.dart       # ValueNotifier + persistencia del modo
-    └── streak.dart                 # computeStreak() — racha de constancia (función pura)
+    ├── theme_controller.dart       # ValueNotifier + persistencia del modo (sistema por defecto)
+    ├── weight_unit.dart            # ValueNotifier + persistencia de la unidad kg/lb
+    ├── responsive.dart             # Breakpoints y helpers (ancho máximo en tablets, escalado de fuente)
+    ├── progression.dart            # suggestNextSession() — sugerencia de sobrecarga progresiva (función pura)
+    ├── overtraining.dart           # computeOvertrainingSignal() — alerta de estancamiento (función pura)
+    ├── wrapped_summary.dart        # computeWrappedSummary() — agregados de "Tu resumen" (función pura)
+    └── streak.dart                 # computeStreak() / computeLongestStreak() — racha de constancia (funciones puras)
 ```
  
 ## Setup
@@ -354,17 +370,62 @@ datos de salud (peso, estatura, edad), vale endurecerla:
    - Rango de peso saludable para tu estatura (BMI 18.5–24.9)
 ## Tema claro / oscuro
  
-La app arranca en **modo claro por defecto**. El menú ⋮ del AppBar
-(esquina superior derecha en cualquier tab) incluye "Cambiar tema", que
-cicla entre tres estados cada vez que se toca:
+La app arranca **siguiendo el tema del sistema por defecto**. El menú ⋮
+del AppBar (esquina superior derecha en cualquier tab) incluye "Cambiar
+tema", que cicla entre tres estados cada vez que se toca:
  
 | Modo | Comportamiento |
 |---|---|
-| Sistema | Sigue al ajuste del SO |
+| Sistema | Sigue al ajuste del SO (por defecto) |
 | Claro | Forzado |
 | Oscuro | Forzado |
  
 La preferencia se persiste en `SharedPreferences` (key `theme_mode`) y se aplica antes del primer frame para evitar parpadeos al iniciar.
+
+## Unidad de peso (kg / lb)
+
+El menú ⋮ incluye también "Unidad de peso", que alterna entre kilogramos
+y libras. Internamente **todo se sigue guardando en kg** (SQLite,
+Firestore, cálculos de volumen y 1RM) — el toggle sólo afecta cómo se
+muestra y se ingresa un peso:
+
+- `WeightUnitController` (`lib/utils/weight_unit.dart`) es un
+  `ValueNotifier<WeightUnit>` persistido en `SharedPreferences`, mismo
+  patrón que `ThemeController`.
+- Cada pantalla que muestra o pide un peso (registro de ejercicio, peso
+  corporal, IMC, rango saludable, gráficos, "Tu resumen") escucha ese
+  notifier y se redibuja sola al cambiar la unidad, sin reiniciar la app.
+- `Validators.weightInUnit()` convierte el valor ingresado a kg antes de
+  validarlo contra los rangos físicos, y muestra el mensaje de error ya
+  convertido a la unidad activa.
+
+## Sugerencia de progresión y alerta de estancamiento
+
+Dos capas de "autorregulación" sobre datos que la app ya tiene — sin IA,
+sin pedir nada nuevo al usuario:
+
+- **Sugerencia de la próxima sesión** (`lib/utils/progression.dart`): al
+  abrir el formulario de registro, si llegaste al techo de tu rango de
+  reps objetivo la app sugiere subir el peso (+2.5 kg tren superior,
+  +5 kg tren inferior); si no llegaste al piso, sugiere repetir el peso
+  y sumar una repetición. Aparece como una tarjeta con botón "Usar" que
+  precarga los campos — nunca se guarda sola.
+- **Alerta de estancamiento** (`lib/utils/overtraining.dart`), en
+  Progreso → Por ejercicio: si la mitad o más de los ejercicios con
+  historial suficiente (≥3 sesiones) no mejoraron su 1RM estimado en las
+  últimas 2 sesiones, se muestra un aviso sugiriendo una semana de
+  descarga. Es estadística simple sobre el propio historial, no un
+  modelo externo.
+
+## Tu resumen (compartible)
+
+Accesible desde el menú ⋮ → "Tu resumen" (`lib/screens/wrapped_screen.dart`):
+agrega todo el historial ya registrado en una tarjeta tipo "Wrapped" — kg/lb
+totales levantados, sesiones registradas, racha más larga que tuviste
+alguna vez (no sólo la activa), músculo más trabajado y tus PRs
+destacados. El botón "Compartir" captura la tarjeta como imagen
+(`RenderRepaintBoundary` + `share_plus`) y abre el selector nativo de
+Android para enviarla a donde quieras.
  
 ## Notas técnicas
  
@@ -386,6 +447,10 @@ flutter test
 - `test/models/`: serialización de los modelos (`toMap`/`fromMap`).
 - `test/utils/validators_test.dart`: casos límite de cada validador.
 - `test/utils/constants_test.dart`: helpers de días de la semana.
+- `test/utils/weight_unit_test.dart`: conversión kg ↔ lb, ida y vuelta sin pérdida de precisión.
+- `test/utils/progression_test.dart`: sugerencia de sobrecarga progresiva (techo/piso de reps, incremento por grupo muscular).
+- `test/utils/overtraining_test.dart`: alerta de estancamiento sobre distintos historiales simulados.
+- `test/utils/streak_test.dart`: racha actual y racha máxima histórica.
 - `test/database/database_helper_migration_test.dart`: la migración v2→v3
   (columnas de sync) no pierde datos y backfillea correctamente, usando
   `sqflite_common_ffi` (SQLite de escritorio, sin depender de un

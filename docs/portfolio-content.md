@@ -1,11 +1,12 @@
 # Contenido para portafolio — Proyecto: Lift.xto
 
-Contenido listo para agregar como **segundo proyecto** en
-`portafolio-mario-rodriguez`, siguiendo el mismo esquema de campos que ya
-usa el proyecto actual ("Comunicación aumentada para inclusión auditiva")
-en `index.html` / `js/i18n.js`: `tag`, `title`, `date`, `affiliation`,
-`cardTitle`, `description`, `point1-3`, `tags`, `galleryTitle`,
-`shotNTitle` / `shotNDesc`.
+Contenido para **actualizar el proyecto Lift.xto que ya existe** en
+`portafolio-mario-rodriguez` (agregado antes como segundo proyecto, junto a
+"Comunicación aumentada para inclusión auditiva"), con las funcionalidades
+nuevas que se sumaron desde la última actualización. Mismo esquema de
+campos de siempre en `index.html` / `js/i18n.js`: `tag`, `title`, `date`,
+`affiliation`, `cardTitle`, `description`, `point1-3`, `tags`,
+`galleryTitle`, `shotNTitle` / `shotNDesc`.
 
 Repo del proyecto: https://github.com/marcxedge/lift_xto
 
@@ -14,26 +15,24 @@ Repo del proyecto: https://github.com/marcxedge/lift_xto
 ## Prompt para pegar en el chat que arma el portafolio
 
 ```
-Necesito que agregues un segundo proyecto a mi portafolio
-(portafolio-mario-rodriguez), siguiendo exactamente el mismo esquema de
-campos que ya usa el proyecto actual ("Comunicación aumentada para
-inclusión auditiva") en index.html / js/i18n.js: tag, title, date,
-affiliation, cardTitle, description, point1-3, tags, galleryTitle,
-shotNTitle/shotNDesc para cada captura de una galería de 12 imágenes.
+Necesito que actualices el proyecto Lift.xto que ya está agregado en mi
+portafolio (portafolio-mario-rodriguez) — no es un proyecto nuevo, es el
+mismo que ya existe, sólo cambió su contenido porque se le sumaron
+funcionalidades.
 
-Te paso todo el contenido ya redactado (español e inglés) en el archivo
-adjunto docs/portfolio-content.md del repo https://github.com/marcxedge/lift_xto.
-Las 12 capturas están en lift_xto/docs/screenshots/*.png (login.png,
-perfil_configuracion.png, rutina_semanal.png, dia_ejercicios.png,
-detalle_ejercicio.png, progreso_volumen.png, progreso_prs.png,
-mapa_muscular.png, catalogo_busqueda.png, catalogo_detalle.png, cuerpo.png,
-medidas_corporales.png) — cópialas a la carpeta de assets del portafolio y
-enlázalas en el mismo orden que aparecen en la tabla de "Galería" del
-archivo.
+Te paso el contenido actualizado (español e inglés) en el archivo adjunto
+docs/portfolio-content.md del repo https://github.com/marcxedge/lift_xto:
+reemplaza description, point1-3 y tags de ese proyecto con los de este
+archivo, y agrega 2 capturas nuevas al final de su galería (shot13 y
+shot14, con su title/desc) — las capturas existentes de la galería se
+quedan igual, no hace falta rehacerlas.
 
-Agrega el proyecto en ambos idiomas (es/en) manteniendo el estilo y la
-estructura HTML/JS que ya existe para el primer proyecto, sin tocar el
-contenido de ese proyecto existente.
+Las 2 capturas nuevas están en lift_xto/docs/screenshots/
+(sugerencia_progresion.png, resumen_wrapped.png) — cópialas a la misma
+carpeta de assets donde están las demás capturas de este proyecto.
+
+Actualiza en ambos idiomas (es/en) manteniendo el estilo y la estructura
+HTML/JS existente, sin tocar el resto del portafolio.
 ```
 
 ---
@@ -70,13 +69,19 @@ Lift.xto — App Flutter de Seguimiento de Gimnasio con Sincronización Offline-
 App Flutter multiplataforma para el seguimiento de entrenamiento de gimnasio
 con sobrecarga progresiva, mapa muscular, peso corporal, medidas corporales
 e IMC. Incluye un catálogo de referencia de ~1300 ejercicios (con GIFs de
-la técnica e instrucciones en español) y una racha de constancia que sigue
-la rutina real del usuario. Los datos se guardan localmente en SQLite y se
-sincronizan en segundo plano con Firebase (Firestore + Storage) mediante un
-patrón outbox, funcionando sin conexión y trayendo automáticamente toda tu
-información al iniciar sesión en un dispositivo nuevo. Arquitectura en
-capas (Repository + Observer) con inyección de dependencias, validación de
-datos centralizada y hardening de seguridad en la build de Android.
+la técnica e instrucciones en español), una racha de constancia que sigue
+la rutina real del usuario, y una capa de autorregulación propia: sugiere
+el peso de la próxima sesión, avisa si un ejercicio se estancó, y genera un
+resumen compartible tipo "Wrapped" con tus récords y totales — todo sobre
+datos que la app ya tiene, sin modelos externos. Unidad de peso
+configurable (kg/lb) con conversión automática en toda la app. Los datos se
+guardan localmente en SQLite y se sincronizan en segundo plano con Firebase
+(Firestore + Storage) mediante un patrón outbox, funcionando sin conexión y
+trayendo automáticamente toda tu información al iniciar sesión en un
+dispositivo nuevo. Arquitectura en capas (Repository + Observer) con
+inyección de dependencias, validación de datos centralizada, diseño
+responsive (teléfonos chicos y tablets) y hardening de seguridad en la
+build de Android.
 ```
 
 **point1** (con `<strong>` permitido, como en el proyecto existente):
@@ -91,7 +96,7 @@ Catálogo de referencia de <strong>~1300 ejercicios</strong> con instrucciones e
 
 **point3**:
 ```
-Arquitectura <strong>Repository + Observer</strong> (ChangeNotifier + provider), autenticación con <strong>Google Sign-In o email/contraseña</strong>, gráficos de progreso con selector de métrica (peso / volumen / 1RM estimado), y build de Android endurecida (reglas de Firestore por usuario, backups deshabilitados, minificación/ofuscación en release).
+Capa de autorregulación propia sobre tu propio historial — <strong>sugerencia de sobrecarga progresiva</strong>, <strong>alerta de estancamiento</strong> y un <strong>resumen compartible</strong> con tus totales y récords, sin IA ni servicios externos — más arquitectura <strong>Repository + Observer</strong> (ChangeNotifier + provider), autenticación con <strong>Google Sign-In o email/contraseña</strong>, unidad de peso <strong>kg/lb</strong> configurable, diseño <strong>responsive</strong> y build de Android endurecida.
 ```
 
 **tags** (chips de tecnología):
@@ -110,7 +115,7 @@ Android
 Capturas de la aplicación
 ```
 
-### Galería (shot1 – shot12)
+### Galería (shot1 – shot14)
 
 | # | Archivo | Title | Desc |
 |---|---------|-------|------|
@@ -126,6 +131,8 @@ Capturas de la aplicación
 | 10 | `catalogo_detalle.png` | **Ficha del ejercicio** | Cada ejercicio del catálogo trae un GIF animado de la técnica correcta e instrucciones numeradas en español — se puede usar para precargar nombre y músculo al crear un ejercicio propio. |
 | 11 | `cuerpo.png` | **Perfil, peso e IMC** | Pantalla unificada de perfil, peso corporal e Índice de Masa Corporal, con escala visual y rango de peso saludable recomendado para tu estatura. |
 | 12 | `medidas_corporales.png` | **Medidas corporales** | Cintura, pecho, cadera, bíceps, muslo, pantorrilla y cuello, con gráfico de evolución por zona — complementa el peso/IMC con composición corporal aproximada. |
+| 13 | `sugerencia_progresion.png` | **Sugerencia de progresión** | Al registrar una sesión, la app sugiere el peso/reps de la próxima según si llegaste al techo o piso de tu rango objetivo — autorregulación simple sobre tu propio historial. |
+| 14 | `resumen_wrapped.png` | **Tu resumen, compartible** | Kg totales levantados, racha máxima histórica, músculo más trabajado y PRs destacados en una tarjeta que se comparte como imagen con un toque. |
 
 ---
 
@@ -161,13 +168,18 @@ Lift.xto — Flutter Gym Tracking App with Offline-First Sync
 Cross-platform Flutter app for tracking gym workouts with progressive
 overload, a muscle map, body weight, body measurements, and BMI. Includes a
 reference catalog of ~1300 exercises (with technique GIFs and Spanish
-instructions) and a consistency streak that follows the user's actual
-routine. Data is stored locally in SQLite and synced in the background with
-Firebase (Firestore + Storage) using an outbox pattern, working fully
-offline and automatically pulling your data when signing in on a new
-device. Layered architecture (Repository + Observer) with dependency
-injection, centralized input validation, and Android security hardening in
-the release build.
+instructions), a consistency streak that follows the user's actual
+routine, and a self-coaching layer: it suggests next session's weight,
+flags exercises that stalled, and generates a shareable "Wrapped"-style
+summary with your totals and records — all from data the app already has,
+no external models. Configurable weight unit (kg/lb) with automatic
+conversion throughout the app. Data is stored locally in SQLite and synced
+in the background with Firebase (Firestore + Storage) using an outbox
+pattern, working fully offline and automatically pulling your data when
+signing in on a new device. Layered architecture (Repository + Observer)
+with dependency injection, centralized input validation, responsive design
+(small phones and tablets), and Android security hardening in the release
+build.
 ```
 
 **point1**:
@@ -182,7 +194,7 @@ Reference catalog of <strong>~1300 exercises</strong> with Spanish instructions 
 
 **point3**:
 ```
-<strong>Repository + Observer</strong> architecture (ChangeNotifier + provider), <strong>Google Sign-In or email/password</strong> authentication, progress charts with a metric switch (weight / volume / estimated 1RM), and a hardened Android release build (per-user Firestore rules, backups disabled, minification/obfuscation enabled).
+A self-coaching layer built on your own history — <strong>progressive overload suggestions</strong>, a <strong>plateau alert</strong>, and a <strong>shareable summary</strong> of your totals and records, no AI or external services — plus <strong>Repository + Observer</strong> architecture (ChangeNotifier + provider), <strong>Google Sign-In or email/password</strong> authentication, configurable <strong>kg/lb</strong> weight unit, responsive design, and a hardened Android release build.
 ```
 
 **tags**:
@@ -201,7 +213,7 @@ Android
 App screenshots
 ```
 
-### Gallery (shot1 – shot12)
+### Gallery (shot1 – shot14)
 
 | # | File | Title | Desc |
 |---|------|-------|------|
@@ -217,11 +229,14 @@ App screenshots
 | 10 | `catalogo_detalle.png` | **Exercise detail** | Every catalog exercise ships an animated technique GIF and numbered Spanish instructions — can be used to prefill name and muscle group when creating your own exercise. |
 | 11 | `cuerpo.png` | **Profile, weight & BMI** | Unified profile, body weight, and Body Mass Index screen, with a visual scale and the recommended healthy weight range for your height. |
 | 12 | `medidas_corporales.png` | **Body measurements** | Waist, chest, hips, biceps, thigh, calf, and neck, with an evolution chart per area — complements weight/BMI with approximate body composition. |
+| 13 | `sugerencia_progresion.png` | **Progression suggestion** | When logging a session, the app suggests next time's weight/reps based on whether you hit the top or bottom of your target rep range — simple self-regulation over your own history. |
+| 14 | `resumen_wrapped.png` | **Your shareable summary** | Total kg lifted, longest streak ever, most-trained muscle, and standout PRs in one card you can share as an image with a tap. |
 
 ---
 
 ## Recursos
 
 - **Repositorio**: https://github.com/marcxedge/lift_xto
-- **Capturas** (ya generadas, listas para usar): `lift_xto/docs/screenshots/*.png`
-  — copiar a la carpeta de assets del portafolio (p. ej. `assets/img/lift-xto/`).
+- **Capturas nuevas de esta actualización**: `lift_xto/docs/screenshots/sugerencia_progresion.png`
+  y `lift_xto/docs/screenshots/resumen_wrapped.png` — copiarlas a la misma carpeta de
+  assets donde ya están las 12 capturas anteriores del proyecto (p. ej. `assets/img/lift-xto/`).

@@ -7,6 +7,7 @@ import '../models/user_profile.dart';
 import '../repositories/profile_repository.dart';
 import '../sync/auth_repository.dart';
 import '../utils/feedback.dart';
+import '../utils/responsive.dart';
 import '../utils/validators.dart';
 
 /// Configuración de perfil obligatoria la primera vez que se entra a la
@@ -117,7 +118,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         automaticallyImplyLeading: false,
         title: const Text('Completa tu perfil'),
       ),
-      body: Form(
+      body: Responsive.withMaxWidth(
+        context,
+        Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -243,6 +246,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

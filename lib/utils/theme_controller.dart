@@ -10,7 +10,7 @@ class ThemeController {
 
   static const _kPrefKey = 'theme_mode';
 
-  final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.light);
+  final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.system);
 
   /// Lee el valor guardado y lo aplica. Llamar una vez al iniciar la app.
   Future<void> load() async {
@@ -51,17 +51,18 @@ class ThemeController {
     }
   }
 
-  /// Sin preferencia guardada, la app arranca en modo claro por defecto
-  /// (no sigue el tema del sistema salvo que el usuario lo elija a mano).
+  /// Sin preferencia guardada, la app sigue el tema del sistema por
+  /// defecto — el usuario puede fijarlo a mano en claro u oscuro desde el
+  /// menú ⋮ si prefiere que no cambie solo.
   static ThemeMode _decode(String? s) {
     switch (s) {
       case 'dark':
         return ThemeMode.dark;
-      case 'system':
-        return ThemeMode.system;
       case 'light':
-      default:
         return ThemeMode.light;
+      case 'system':
+      default:
+        return ThemeMode.system;
     }
   }
 }

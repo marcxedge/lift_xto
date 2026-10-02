@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/app_exception.dart';
 import '../sync/auth_repository.dart';
 import '../utils/feedback.dart';
+import '../utils/responsive.dart';
 import '../utils/validators.dart';
 import '../widgets/google_logo.dart';
 
@@ -98,7 +99,9 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child: Responsive.withMaxWidth(
+          context,
+          SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(32, 32, 32, 48),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -246,6 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ],
             ),
+          ),
           ),
         ),
       ),

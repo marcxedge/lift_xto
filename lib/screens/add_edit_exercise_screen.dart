@@ -8,6 +8,7 @@ import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
 import '../utils/muscle_groups.dart';
+import '../utils/responsive.dart';
 import '../utils/validators.dart';
 import 'exercise_catalog_screen.dart';
 
@@ -143,7 +144,9 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
           ),
         ],
       ),
-      body: Form(
+      body: Responsive.withMaxWidth(
+        context,
+        Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -315,6 +318,7 @@ class _AddEditExerciseScreenState extends State<AddEditExerciseScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

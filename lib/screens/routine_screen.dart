@@ -8,6 +8,7 @@ import '../repositories/exercise_repository.dart';
 import '../repositories/profile_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
+import '../utils/responsive.dart';
 import '../widgets/app_menu_button.dart';
 import '../widgets/profile_sheet.dart';
 import '../widgets/sync_status_button.dart';
@@ -142,27 +143,35 @@ class _RoutineScreenState extends State<RoutineScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final data = snap.data!;
-          return RefreshIndicator(
-            onRefresh: () async => _refresh(),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              children: [
-                for (var day = 1; day <= 7; day++)
-                  _DayCard(
-                    day: day,
-                    title: 'Ver detalles',
-                    exercises: data[day] ?? const [],
-                    isToday: day == today,
-                    onTap: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => DayExercisesScreen(dayOfWeek: day),
-                        ),
-                      );
-                      // Idem: ExerciseRepository ya notificó si hubo cambios.
-                    },
-                  ),
-              ],
+          return Responsive.withMaxWidth(
+            context,
+            RefreshIndicator(
+              onRefresh: () async => _refresh(),
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  Responsive.horizontalPadding(context),
+                  8,
+                  Responsive.horizontalPadding(context),
+                  24,
+                ),
+                children: [
+                  for (var day = 1; day <= 7; day++)
+                    _DayCard(
+                      day: day,
+                      title: 'Ver detalles',
+                      exercises: data[day] ?? const [],
+                      isToday: day == today,
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => DayExercisesScreen(dayOfWeek: day),
+                          ),
+                        );
+                        // Idem: ExerciseRepository ya notificó si hubo cambios.
+                      },
+                    ),
+                ],
+              ),
             ),
           );
         },
@@ -231,11 +240,15 @@ class _DayCard extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              Text(
-                                Weekday.name(day),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                              Flexible(
+                                child: Text(
+                                  Weekday.name(day),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               if (isToday) ...[

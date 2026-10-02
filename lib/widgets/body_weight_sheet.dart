@@ -7,6 +7,7 @@ import '../models/body_weight_log.dart';
 import '../repositories/body_weight_repository.dart';
 import '../utils/feedback.dart';
 import '../utils/validators.dart';
+import '../utils/weight_unit.dart';
 
 class BodyWeightSheet extends StatefulWidget {
   const BodyWeightSheet({super.key});
@@ -22,6 +23,7 @@ class _BodyWeightSheetState extends State<BodyWeightSheet> {
   final _notes = TextEditingController();
   DateTime _date = DateTime.now();
   bool _saving = false;
+  final WeightUnit _unit = WeightUnitController.instance.unit.value;
 
   @override
   void initState() {
@@ -33,7 +35,7 @@ class _BodyWeightSheetState extends State<BodyWeightSheet> {
   Future<void> _prefillLast() async {
     final last = await _repo.getLatest();
     if (last != null && mounted) {
-      _weight.text = _fmt(last.weightKg);
+      _weight.text = _fmt(_unit.fromKg(last.weightKg));
     }
   }
 
@@ -58,7 +60,7 @@ class _BodyWeightSheetState extends State<BodyWeightSheet> {
     if (!_formKey.currentState!.validate()) return;
     final log = BodyWeightLog(
       date: _date,
-      weightKg: Validators.parseDecimal(_weight.text.trim())!,
+      weightKg: _unit.toKg(Validators.parseDecimal(_weight.text.trim())!),
       notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
     );
     setState(() => _saving = true);
@@ -126,14 +128,15 @@ class _BodyWeightSheetState extends State<BodyWeightSheet> {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                 ],
-                decoration: const InputDecoration(
-                  labelText: 'Peso (kg)',
-                  prefixIcon: Icon(Icons.monitor_weight),
+                decoration: InputDecoration(
+                  labelText: 'Peso (${_unit.suffix})',
+                  prefixIcon: const Icon(Icons.monitor_weight),
                 ),
-                validator: (v) => Validators.weight(
+                validator: (v) => Validators.weightInUnit(
                   v,
-                  min: Validators.bodyWeightMin,
-                  max: Validators.bodyWeightMax,
+                  _unit,
+                  minKg: Validators.bodyWeightMin,
+                  maxKg: Validators.bodyWeightMax,
                 ),
               ),
               const SizedBox(height: 12),

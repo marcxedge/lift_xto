@@ -164,4 +164,27 @@ class ExerciseLogRepository extends ChangeNotifier {
       throw AppException('No se pudo calcular la racha.', cause: e);
     }
   }
+
+  /// Racha más larga que el usuario tuvo alguna vez (no sólo la activa
+  /// ahora) — usada en el resumen "Wrapped".
+  Future<int> longestStreakEver() async {
+    try {
+      final weekdays = await _db.getTrainingWeekdays();
+      final dates = await _db.getExerciseLogDates();
+      return computeLongestStreak(trainingWeekdays: weekdays, loggedDates: dates);
+    } catch (e) {
+      throw AppException('No se pudo calcular la racha máxima.', cause: e);
+    }
+  }
+
+  /// Fechas distintas con al menos un registro — usado para contar
+  /// sesiones totales en el resumen "Wrapped".
+  Future<int> totalSessionDays() async {
+    try {
+      final dates = await _db.getExerciseLogDates();
+      return dates.length;
+    } catch (e) {
+      throw AppException('No se pudo contar las sesiones.', cause: e);
+    }
+  }
 }

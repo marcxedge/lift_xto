@@ -39,3 +39,35 @@ int computeStreak({
   }
   return streak;
 }
+
+/// Igual que [computeStreak], pero recorre todo el historial (desde el
+/// primer registro hasta hoy) para encontrar la racha más larga que el
+/// usuario tuvo alguna vez — no sólo la que está activa ahora. Usado en el
+/// resumen "Wrapped".
+int computeLongestStreak({
+  required Set<int> trainingWeekdays,
+  required Set<DateTime> loggedDates,
+  DateTime? now,
+}) {
+  if (trainingWeekdays.isEmpty || loggedDates.isEmpty) return 0;
+
+  DateTime dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+  final today = dateOnly(now ?? DateTime.now());
+  final earliest = loggedDates.reduce((a, b) => a.isBefore(b) ? a : b);
+
+  var longest = 0;
+  var current = 0;
+  var day = earliest;
+  while (!day.isAfter(today)) {
+    if (trainingWeekdays.contains(day.weekday)) {
+      if (loggedDates.contains(day)) {
+        current++;
+        if (current > longest) longest = current;
+      } else {
+        current = 0;
+      }
+    }
+    day = day.add(const Duration(days: 1));
+  }
+  return longest;
+}

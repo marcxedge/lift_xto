@@ -1,3 +1,5 @@
+import 'weight_unit.dart';
+
 /// Validadores centralizados con rangos físicamente razonables. Antes cada
 /// formulario tenía su propia validación ad-hoc (algunas sólo chequeaban
 /// `n >= 0`, sin techo), lo que permitía guardar valores absurdos (un peso
@@ -47,6 +49,30 @@ class Validators {
     if (n == null) return 'Número inválido';
     if (n < min || n > max) {
       return 'Debe estar entre ${_fmt(min)} y ${_fmt(max)}';
+    }
+    return null;
+  }
+
+  /// Igual que [weight], pero el valor viene en la unidad preferida del
+  /// usuario (kg o lb) — convierte a kg antes de comparar contra los
+  /// límites (siempre en kg), y muestra el mensaje de error ya convertido
+  /// a esa misma unidad para que tenga sentido para quien lo lee.
+  static String? weightInUnit(
+    String? value,
+    WeightUnit unit, {
+    double minKg = weightLogMin,
+    double maxKg = weightLogMax,
+    bool required = true,
+  }) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return required ? 'Requerido' : null;
+    final n = parseDecimal(trimmed);
+    if (n == null) return 'Número inválido';
+    final kg = unit.toKg(n);
+    if (kg < minKg || kg > maxKg) {
+      final lo = unit.fromKg(minKg);
+      final hi = unit.fromKg(maxKg);
+      return 'Debe estar entre ${_fmt(lo)} y ${_fmt(hi)} ${unit.suffix}';
     }
     return null;
   }

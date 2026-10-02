@@ -5,6 +5,7 @@ import '../models/exercise.dart';
 import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
+import '../utils/responsive.dart';
 import '../widgets/muscle_chip.dart';
 import '../widgets/state_views.dart';
 import 'add_edit_exercise_screen.dart';
@@ -125,8 +126,15 @@ class _DayExercisesScreenState extends State<DayExercisesScreen> {
                   'Toca el botón "Agregar" para incluir ejercicios en este día.',
             );
           }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+          return Responsive.withMaxWidth(
+            context,
+            ListView.separated(
+            padding: EdgeInsets.fromLTRB(
+              Responsive.horizontalPadding(context),
+              16,
+              Responsive.horizontalPadding(context),
+              96,
+            ),
             itemCount: exercises.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
@@ -144,6 +152,7 @@ class _DayExercisesScreenState extends State<DayExercisesScreen> {
                 onDelete: () => _deleteExercise(ex),
               );
             },
+            ),
           );
         },
       ),

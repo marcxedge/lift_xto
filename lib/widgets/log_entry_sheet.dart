@@ -8,7 +8,9 @@ import '../models/exercise_log.dart';
 import '../repositories/exercise_log_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
+import '../utils/progression.dart';
 import '../utils/validators.dart';
+import '../utils/weight_unit.dart';
 
 class LogEntrySheet extends StatefulWidget {
   const LogEntrySheet({super.key, required this.exercise});
@@ -32,6 +34,8 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
   bool _saving = false;
 
   ExerciseLog? _lastLog;
+  ProgressionSuggestion? _suggestion;
+  final WeightUnit _unit = WeightUnitController.instance.unit.value;
 
   @override
   void initState() {
@@ -47,14 +51,27 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
     setState(() {
       _lastLog = last;
       if (widget.exercise.trackingType == TrackingType.weight) {
-        if (last.weightKg != null) _weight.text = _fmt(last.weightKg!);
+        if (last.weightKg != null) _weight.text = _fmtKg(last.weightKg!);
         if (last.repsCompleted != null) _reps.text = '${last.repsCompleted}';
         if (last.setsCompleted != null) _sets.text = '${last.setsCompleted}';
+        _suggestion = suggestNextSession(
+          exercise: widget.exercise,
+          lastLog: last,
+        );
       } else {
         if (last.durationSeconds != null) {
           _duration.text = '${last.durationSeconds}';
         }
       }
+    });
+  }
+
+  void _applySuggestion() {
+    final s = _suggestion;
+    if (s == null) return;
+    setState(() {
+      _weight.text = _fmtKg(s.weightKg);
+      if (s.reps != null) _reps.text = '${s.reps}';
     });
   }
 
@@ -82,12 +99,13 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
     if (!_formKey.currentState!.validate()) return;
 
     final isDuration = widget.exercise.trackingType == TrackingType.duration;
+    final enteredWeight = Validators.parseDecimal(_weight.text.trim());
     final log = ExerciseLog(
       exerciseId: widget.exercise.id!,
       date: _date,
-      weightKg: isDuration
+      weightKg: isDuration || enteredWeight == null
           ? null
-          : Validators.parseDecimal(_weight.text.trim()),
+          : _unit.toKg(enteredWeight),
       setsCompleted: int.tryParse(_sets.text.trim()),
       repsCompleted:
       isDuration ? null : int.tryParse(_reps.text.trim()),
@@ -108,8 +126,11 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
     }
   }
 
-  String _fmt(double w) {
-    return w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toStringAsFixed(1);
+  /// Convierte un peso guardado en kg a la unidad preferida y lo formatea
+  /// sin sufijo, listo para meter en un `TextEditingController`.
+  String _fmtKg(double kg) {
+    final v = _unit.fromKg(kg);
+    return v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
   }
 
   @override
@@ -178,6 +199,14 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
               ),
               const SizedBox(height: 16),
               if (!isDuration) ...[
+                if (_suggestion != null) ...[
+                  _SuggestionCard(
+                    suggestion: _suggestion!,
+                    unit: _unit,
+                    onApply: _applySuggestion,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 TextFormField(
                   controller: _weight,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -188,11 +217,11 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
                       RegExp(r'[0-9.,]'),
                     ),
                   ],
-                  decoration: const InputDecoration(
-                    labelText: 'Peso (kg)',
-                    prefixIcon: Icon(Icons.fitness_center),
+                  decoration: InputDecoration(
+                    labelText: 'Peso (${_unit.suffix})',
+                    prefixIcon: const Icon(Icons.fitness_center),
                   ),
-                  validator: Validators.weight,
+                  validator: (v) => Validators.weightInUnit(v, _unit),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -285,8 +314,68 @@ class _LogEntrySheetState extends State<LogEntrySheet> {
     if (isDuration && last.durationSeconds != null) {
       return '${last.durationSeconds}s ($fmt)';
     }
-    final w = last.weightKg ?? 0;
-    final wStr = _fmt(w);
-    return '$wStr kg · ${last.setsCompleted ?? "?"}x${last.repsCompleted ?? "?"} ($fmt)';
+    final wStr = WeightUnitController.instance.format(last.weightKg);
+    return '$wStr · ${last.setsCompleted ?? "?"}x${last.repsCompleted ?? "?"} ($fmt)';
+  }
+}
+
+/// Banner de autorregulación: sugiere peso/reps para la próxima sesión
+/// según si la última vez se llegó al techo/piso del rango de reps
+/// objetivo (ver `suggestNextSession`). Sólo precarga el formulario si el
+/// usuario toca "Usar" — nunca guarda nada sola.
+class _SuggestionCard extends StatelessWidget {
+  const _SuggestionCard({
+    required this.suggestion,
+    required this.unit,
+    required this.onApply,
+  });
+
+  final ProgressionSuggestion suggestion;
+  final WeightUnit unit;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final weightStr = WeightUnitController.instance.formatNumber(suggestion.weightKg);
+    final repsStr = suggestion.reps != null ? ' × ${suggestion.reps}' : '';
+    return Card(
+      color: scheme.tertiaryContainer,
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.auto_graph, color: scheme.onTertiaryContainer, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sugerencia: $weightStr ${unit.suffix}$repsStr',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onTertiaryContainer,
+                    ),
+                  ),
+                  Text(
+                    suggestion.reason,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: scheme.onTertiaryContainer.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: onApply,
+              child: const Text('Usar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -9,6 +9,8 @@ import '../repositories/exercise_log_repository.dart';
 import '../repositories/exercise_repository.dart';
 import '../utils/constants.dart';
 import '../utils/feedback.dart';
+import '../utils/responsive.dart';
+import '../utils/weight_unit.dart';
 import '../widgets/log_entry_sheet.dart';
 import '../widgets/muscle_chip.dart';
 import '../widgets/state_views.dart';
@@ -97,15 +99,25 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
     final isDuration = ex.trackingType == TrackingType.duration;
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return ValueListenableBuilder<WeightUnit>(
+      valueListenable: WeightUnitController.instance.unit,
+      builder: (context, unit, _) {
+        return Scaffold(
       appBar: AppBar(title: Text(ex.name)),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addLog,
         icon: const Icon(Icons.add),
         label: const Text('Registrar'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      body: Responsive.withMaxWidth(
+        context,
+        ListView(
+        padding: EdgeInsets.fromLTRB(
+          Responsive.horizontalPadding(context),
+          8,
+          Responsive.horizontalPadding(context),
+          96,
+        ),
         children: [
           Card(
             child: Padding(
@@ -162,7 +174,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _StatsRow(logs: _logsData, isDuration: isDuration),
+          _StatsRow(logs: _logsData, isDuration: isDuration, unit: unit),
           const SizedBox(height: 16),
           if (_logsData.length >= 2) ...[
             Row(
@@ -219,6 +231,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                     logs: _logsData,
                     isDuration: isDuration,
                     metric: isDuration ? _ChartMetric.weight : _metric,
+                    unit: unit,
                   ),
                 ),
               ),
@@ -247,20 +260,29 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                   (log) => _LogTile(
                 log: log,
                 isDuration: isDuration,
+                unit: unit,
                 onDelete: () => _deleteLog(log),
               ),
             ),
         ],
       ),
+      ),
+        );
+      },
     );
   }
 }
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.logs, required this.isDuration});
+  const _StatsRow({
+    required this.logs,
+    required this.isDuration,
+    required this.unit,
+  });
 
   final List<ExerciseLog> logs;
   final bool isDuration;
+  final WeightUnit unit;
 
   @override
   Widget build(BuildContext context) {
@@ -273,7 +295,7 @@ class _StatsRow extends StatelessWidget {
       if (isDuration && l.durationSeconds != null) {
         last = _fmtSeconds(l.durationSeconds!);
       } else if (l.weightKg != null) {
-        last = '${_fmtWeight(l.weightKg!)} kg';
+        last = WeightUnitController.instance.format(l.weightKg);
       }
 
       if (isDuration) {
@@ -287,7 +309,7 @@ class _StatsRow extends StatelessWidget {
             .where((e) => e.weightKg != null)
             .map((e) => e.weightKg!)
             .fold<double?>(null, (m, v) => m == null || v > m ? v : m);
-        if (maxW != null) pr = '${_fmtWeight(maxW)} kg';
+        if (maxW != null) pr = WeightUnitController.instance.format(maxW);
       }
     }
 
@@ -319,10 +341,6 @@ class _StatsRow extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  String _fmtWeight(double w) {
-    return w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toStringAsFixed(1);
   }
 
   String _fmtSeconds(int s) {
@@ -364,16 +382,19 @@ class _StatCard extends StatelessWidget {
               color: highlight ? scheme.onPrimaryContainer : scheme.primary,
             ),
             const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color:
-                highlight ? scheme.onPrimaryContainer : scheme.onSurface,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color:
+                  highlight ? scheme.onPrimaryContainer : scheme.onSurface,
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
             Text(
               label,
@@ -383,6 +404,8 @@ class _StatCard extends StatelessWidget {
                     ? scheme.onPrimaryContainer.withValues(alpha: 0.8)
                     : scheme.onSurfaceVariant,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -402,15 +425,21 @@ class _ProgressChart extends StatelessWidget {
     required this.logs,
     required this.isDuration,
     this.metric = _ChartMetric.weight,
+    required this.unit,
   });
 
   final List<ExerciseLog> logs;
   final bool isDuration;
   final _ChartMetric metric;
+  final WeightUnit unit;
 
+  /// El peso de cada log siempre se guarda en kg; acá se convierte a la
+  /// unidad activa antes de graficar. Como volumen y 1RM son lineales en
+  /// el peso (peso × constante), convertir el resultado final da el mismo
+  /// número que convertir el peso de cada set antes de calcular.
   double _valueFor(ExerciseLog l) {
     if (isDuration) return l.durationSeconds?.toDouble() ?? 0;
-    final weight = l.weightKg ?? 0;
+    final weight = unit.fromKg(l.weightKg ?? 0);
     switch (metric) {
       case _ChartMetric.weight:
         return weight;
@@ -532,11 +561,13 @@ class _LogTile extends StatelessWidget {
   const _LogTile({
     required this.log,
     required this.isDuration,
+    required this.unit,
     required this.onDelete,
   });
 
   final ExerciseLog log;
   final bool isDuration;
+  final WeightUnit unit;
   final VoidCallback onDelete;
 
   @override
@@ -550,12 +581,10 @@ class _LogTile extends StatelessWidget {
       final s = log.durationSeconds! % 60;
       title = m > 0 ? '$m min ${s > 0 ? '$s s' : ''}'.trim() : '${s}s';
     } else {
-      final w = log.weightKg ?? 0;
-      final wStr =
-      w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toStringAsFixed(1);
+      final wStr = WeightUnitController.instance.formatNumber(log.weightKg ?? 0);
       final reps = log.repsCompleted ?? 0;
       final sets = log.setsCompleted ?? 0;
-      title = '$wStr kg · ${sets}x$reps';
+      title = '$wStr ${unit.suffix} · ${sets}x$reps';
     }
 
     return Card(
